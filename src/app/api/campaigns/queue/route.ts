@@ -4,8 +4,16 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type Body = {
+  categoryId: number;
+  phaseNumber: number;
+  templateId: number;
+};
+
+type ContactIdRow = { id: number };
+
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => null);
+  const body = (await req.json().catch(() => null)) as Body | null;
 
   const categoryId = Number(body?.categoryId);
   const phaseNumber = Number(body?.phaseNumber);
@@ -26,11 +34,13 @@ export async function POST(req: Request) {
     prisma.template.findUnique({ where: { id: templateId } }),
   ]);
 
-  if (!category) return NextResponse.json({ error: "Category not found" }, { status: 404 });
-  if (!template) return NextResponse.json({ error: "Template not found" }, { status: 404 });
+  if (!category)
+    return NextResponse.json({ error: "Category not found" }, { status: 404 });
+  if (!template)
+    return NextResponse.json({ error: "Template not found" }, { status: 404 });
 
   // Only queue contacts that are "active"
-  const contacts = await prisma.contact.findMany({
+  const contacts: ContactIdRow[] = await prisma.contact.findMany({
     where: {
       categoryId,
       phaseNumber,
@@ -57,7 +67,7 @@ export async function POST(req: Request) {
   });
 
   // Create SendLogs in bulk
-  const logsData = contacts.map((c) => ({
+  const logsData = contacts.map((c: ContactIdRow) => ({
     campaignId: campaign.id,
     contactId: c.id,
     status: "queued",
