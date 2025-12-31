@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  phaseSize Int        @default(500)
+  contacts  Contact[]
+  campaigns Campaign[]
+  createdAt DateTime   @default(now())
+}
+
+model Contact {
+  id          Int      @id @default(autoincrement())
+  categoryId  Int
+  category    Category @relation(fields: [categoryId], references: [id])
+  email       String
+  phaseNumber Int
+  status      String   @default("active") // active|bounced|unsubscribed|complained
+  createdAt   DateTime @default(now())
+
+  sendLogs SendLog[]
+
+  @@unique([categoryId, email])
+  @@index([categoryId, phaseNumber])
+}
+
+model Template {
+  id        Int      @id @default(autoincrement())
+  name      String
+  subject   String
+  html      String
+  createdAt DateTime @default(now())
+
+  campaigns Campaign[]
+}
+
+model Campaign {
+  id          Int      @id @default(autoincrement())
+  categoryId  Int
+  category    Category @relation(fields: [categoryId], references: [id])
+  phaseNumber Int
+  templateId  Int
+  template    Template @relation(fields: [templateId], references: [id])
+  status      String   @default("draft") // draft|queued|sending|done|paused
+  createdAt   DateTime @default(now())
+
+  logs SendLog[]
+
+  @@index([categoryId, phaseNumber])
+}
+
+model SendLog {
+  id         Int      @id @default(autoincrement())
+  campaignId Int
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  contactId  Int
+  contact    Contact  @relation(fields: [contactId], references: [id])
+
+  status            String   @default("queued") // queued|sent|failed
+  provider          String   @default("mailgun") // mailgun|resend|ses|etc
+  providerMessageId String?  // Mailgun's id, Resend's id, etc.
+  error             String?
+  sentAt            DateTime?
+  createdAt         DateTime @default(now())
+
+  @@index([campaignId, status])
+  @@index([provider])
+}
