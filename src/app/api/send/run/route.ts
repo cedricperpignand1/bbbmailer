@@ -78,7 +78,7 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as Body | null;
 
   const campaignId = Number(body?.campaignId);
-  const limit = Math.min(Math.max(Number(body?.limit ?? 25), 1), 500); // 1..500
+  const limit = Math.min(Math.max(Number(body?.limit ?? 50), 1), 500); // 1..500
   const dryRun = Boolean(body?.dryRun);
 
   if (!Number.isFinite(campaignId) || campaignId <= 0) {

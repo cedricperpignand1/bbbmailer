@@ -245,7 +245,7 @@ export default function CampaignsPage() {
             Campaigns
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Queue a phase, then send a safe batch. Always test with <b>Send 25</b> first.
+            Queue a phase, then send a safe batch. Always test with <b>Send 50</b> first.
           </p>
         </div>
 
