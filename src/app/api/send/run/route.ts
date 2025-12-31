@@ -241,7 +241,7 @@ export async function POST(req: Request) {
 
       const msg = safeStr(e?.message || e || "Unknown error");
 
-      // Make sure failures always get recorded
+      // Make sure failures always get recorded.
       try {
         await prisma.sendLog.update({
           where: { id: log.id },
