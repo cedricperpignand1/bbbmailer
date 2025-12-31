@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     },
   });
 
-  // Create SendLogs in bulk
+  // Create SendLogs in bulk.
   const logsData = contacts.map((c: ContactIdRow) => ({
     campaignId: campaign.id,
     contactId: c.id,
