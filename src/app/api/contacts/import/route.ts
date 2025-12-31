@@ -134,6 +134,6 @@ export async function POST(req: Request) {
       maxPhaseNow: maxPhase,
       totalContactsNow: afterCount,
     },
-    invalid: invalid.slice(0, 25),
+    invalid: invalid.slice(0, 50),
   });
 }

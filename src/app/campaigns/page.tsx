@@ -486,7 +486,7 @@ export default function CampaignsPage() {
 
                               <button
                                 className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
-                                onClick={() => sendBatch(c.id, 25)}
+                                onClick={() => sendBatch(c.id, 50)}
                                 disabled={sending}
                                 title="Test small batch"
                               >
