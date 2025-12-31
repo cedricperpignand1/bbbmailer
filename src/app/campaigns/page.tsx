@@ -392,7 +392,7 @@ export default function CampaignsPage() {
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                 <div className="font-semibold text-slate-900">Safety workflow</div>
                 <div className="mt-1">
-                  Queue → Send 25 → confirm inbox → Send 500.
+                  Queue → Send 50 → confirm inbox → Send 500.
                 </div>
               </div>
             </div>
@@ -490,7 +490,7 @@ export default function CampaignsPage() {
                                 disabled={sending}
                                 title="Test small batch"
                               >
-                                Send 25
+                                Send 50
                               </button>
                             </div>
                           </td>

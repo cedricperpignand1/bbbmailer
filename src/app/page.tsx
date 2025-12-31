@@ -95,7 +95,7 @@ export default function Home() {
               <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
                 4
               </span>
-              Send 25 first, then Send 500
+              Send 50 first, then Send 500
             </li>
           </ol>
         </div>
