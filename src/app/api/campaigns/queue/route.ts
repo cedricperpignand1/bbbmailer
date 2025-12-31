@@ -39,7 +39,7 @@ export async function POST(req: Request) {
   if (!template)
     return NextResponse.json({ error: "Template not found" }, { status: 404 });
 
-  // Only queue contacts that are "active"
+  // Only queue contacts that are "active".
   const contacts: ContactIdRow[] = await prisma.contact.findMany({
     where: {
       categoryId,
