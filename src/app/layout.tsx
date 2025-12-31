@@ -57,7 +57,7 @@ export default function RootLayout({
 
               {/* Tabs */}
               <nav className="hidden md:flex items-center gap-1 rounded-2xl bg-white/10 p-1 border border-white/10">
-                <NavLink href="/categories" label="Categories" />
+                <NavLink href="/categories" label="Contacts" />
                 <NavLink href="/templates" label="Templates" />
                 <NavLink href="/campaigns" label="Campaigns" />
               </nav>
