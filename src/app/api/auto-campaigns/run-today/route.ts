@@ -9,30 +9,27 @@ export const dynamic = "force-dynamic";
  *
  * - Scheduled mode (default):
  *   - Only runs Mon–Fri
- *   - Only runs if ET day-of-month matches auto.dayOfMonth
+ *   - Only runs if today ET is within [auto.windowStartET, auto.windowEndET)
  *   - Only runs if ET time is within +/- 10 minutes of auto.sendHourET:auto.sendMinuteET
  *
  * - Manual mode:
- *   - Add ?force=1 to bypass schedule checks (still Mon–Fri bucket logic)
+ *   - Add ?force=1 to bypass schedule checks (time + window), still Mon–Fri bucket logic
  *
  * - Contact bucketing:
  *   contact.id % 5 -> Mon..Fri
  *     mon=0, tue=1, wed=2, thu=3, fri=4
  *
- * - Creates:
- *   - normal Campaign (phaseNumber=999)
- *   - SendLogs (queued)
- *   - AutoCampaignRun (monthKey + weekdayKey) to prevent duplicates
+ * - Prevent duplicates:
+ *   AutoCampaignRun has @@unique([autoCampaignId, runDateET])
+ *   so we block duplicates by today's ET date string.
+ *
+ * - Step D (Address randomization):
+ *   - Parse auto.addressesText (one per line)
+ *   - For each contact queued today, pick a deterministic "random" address
+ *   - Save it to SendLog.meta = { address: "..." }
  */
 
-function monthKeyFromEtParts(p: { year: number; month: number }) {
-  const y = p.year;
-  const m = String(p.month).padStart(2, "0");
-  return `${y}-${m}`;
-}
-
 function weekdayKeyFromEtParts(p: { weekday: string }) {
-  // Intl weekday in English: Mon, Tue, Wed...
   const w = p.weekday.toLowerCase();
   if (w.startsWith("mon")) return "mon";
   if (w.startsWith("tue")) return "tue";
@@ -49,11 +46,10 @@ function bucketIndexForWeekday(w: string) {
   if (w === "wed") return 2;
   if (w === "thu") return 3;
   if (w === "fri") return 4;
-  return null; // weekend
+  return null;
 }
 
 function getEtParts(now = new Date()) {
-  // reliable ET conversion
   const dtf = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
     year: "numeric",
@@ -62,6 +58,7 @@ function getEtParts(now = new Date()) {
     weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hour12: false,
   });
 
@@ -76,18 +73,112 @@ function getEtParts(now = new Date()) {
   const day = Number(map.day);
   const hour = Number(map.hour);
   const minute = Number(map.minute);
+  const second = Number(map.second ?? "0");
   const weekday = map.weekday || "Mon";
 
-  return { year, month, day, hour, minute, weekday };
+  return { year, month, day, hour, minute, second, weekday };
 }
 
 function minutes(h: number, m: number) {
   return h * 60 + m;
 }
 
+function yyyyMmDdFromEt(et: { year: number; month: number; day: number }) {
+  const y = et.year;
+  const m = String(et.month).padStart(2, "0");
+  const d = String(et.day).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/* ===== Helpers to get "ET midnight" as a UTC Date for comparisons ===== */
+
+const ET_TZ = "America/New_York";
+
+function getZonedParts(d: Date, timeZone: string) {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+
+  const parts = dtf.formatToParts(d);
+  const pick = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+
+  return {
+    year: pick("year"),
+    month: pick("month"),
+    day: pick("day"),
+    hour: pick("hour"),
+    minute: pick("minute"),
+    second: pick("second"),
+  };
+}
+
+function zonedTimeToUtc(
+  year: number,
+  month: number, // 1-12
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+  timeZone: string
+) {
+  let utc = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+
+  for (let i = 0; i < 5; i++) {
+    const z = getZonedParts(utc, timeZone);
+
+    const actualLocalEpoch = Date.UTC(
+      z.year,
+      z.month - 1,
+      z.day,
+      z.hour,
+      z.minute,
+      z.second
+    );
+
+    const desiredLocalEpoch = Date.UTC(year, month - 1, day, hour, minute, second);
+
+    const diffMs = desiredLocalEpoch - actualLocalEpoch;
+    if (Math.abs(diffMs) < 1000) break;
+
+    utc = new Date(utc.getTime() + diffMs);
+  }
+
+  return utc;
+}
+
+/* ================= Step D helpers ================= */
+
+function parseAddresses(addressesText: string) {
+  return String(addressesText || "")
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 5000);
+}
+
+function yyyymmddNumber(runDateET: string) {
+  // "2026-01-06" -> 20260106
+  const n = Number(String(runDateET).replaceAll("-", ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function pickAddress(addresses: string[], contactId: number, runDateET: string) {
+  if (!addresses.length) return "";
+  const seed = contactId * 31 + yyyymmddNumber(runDateET);
+  const idx = ((seed % addresses.length) + addresses.length) % addresses.length;
+  return addresses[idx];
+}
+
 export async function POST(req: Request) {
   const url = new URL(req.url);
-  const force = url.searchParams.get("force") === "1"; // manual override
+  const force = url.searchParams.get("force") === "1";
 
   const et = getEtParts(new Date());
   const weekdayKey = weekdayKeyFromEtParts({ weekday: et.weekday });
@@ -113,24 +204,46 @@ export async function POST(req: Request) {
     );
   }
 
-  // ===== Scheduled checks (unless force=1) =====
+  if (!auto.windowStartET || !auto.windowEndET) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "AutoCampaign windowStartET/windowEndET not set. Open Auto Campaign settings and click Save to start a new 30-day window.",
+        autoCampaignId: auto.id,
+      },
+      { status: 400 }
+    );
+  }
+
+  const runDateET = yyyyMmDdFromEt(et);
+
+  // scheduled checks (unless force=1)
   if (!force) {
-    // day-of-month match
-    if (et.day !== Number(auto.dayOfMonth)) {
+    const todayMidnightET_UTC = zonedTimeToUtc(et.year, et.month, et.day, 0, 0, 0, ET_TZ);
+
+    const inWindow =
+      todayMidnightET_UTC.getTime() >= new Date(auto.windowStartET).getTime() &&
+      todayMidnightET_UTC.getTime() < new Date(auto.windowEndET).getTime();
+
+    if (!inWindow) {
       return NextResponse.json(
         {
           ok: true,
           skipped: true,
-          reason: `Not scheduled day-of-month. Today (ET) is ${et.day}, scheduled is ${auto.dayOfMonth}.`,
+          reason: "Outside 30-day window",
+          runDateET,
           weekdayKey,
           et,
-          scheduled: { dayOfMonth: auto.dayOfMonth, hour: auto.sendHourET, minute: auto.sendMinuteET },
+          window: {
+            windowStartET: auto.windowStartET,
+            windowEndET: auto.windowEndET,
+          },
         },
         { status: 200 }
       );
     }
 
-    // time window +/- 10 minutes
     const nowMin = minutes(et.hour, et.minute);
     const schedMin = minutes(Number(auto.sendHourET), Number(auto.sendMinuteET));
     const diff = Math.abs(nowMin - schedMin);
@@ -140,13 +253,16 @@ export async function POST(req: Request) {
         {
           ok: true,
           skipped: true,
-          reason: `Outside scheduled time window (+/-10m). Now (ET) ${et.hour}:${String(et.minute).padStart(
+          reason: `Outside scheduled time window (+/-10m). Now (ET) ${et.hour}:${String(
+            et.minute
+          ).padStart(2, "0")}, scheduled ${auto.sendHourET}:${String(auto.sendMinuteET).padStart(
             2,
             "0"
-          )}, scheduled ${auto.sendHourET}:${String(auto.sendMinuteET).padStart(2, "0")}.`,
+          )}.`,
+          runDateET,
           weekdayKey,
           et,
-          scheduled: { dayOfMonth: auto.dayOfMonth, hour: auto.sendHourET, minute: auto.sendMinuteET },
+          scheduled: { hour: auto.sendHourET, minute: auto.sendMinuteET },
           diffMinutes: diff,
         },
         { status: 200 }
@@ -154,15 +270,9 @@ export async function POST(req: Request) {
     }
   }
 
-  const monthKey = monthKeyFromEtParts({ year: et.year, month: et.month });
-
-  // prevent duplicates: one run per weekday per month
+  // prevent duplicates: one run per ET date
   const existingRun = await prisma.autoCampaignRun.findFirst({
-    where: {
-      autoCampaignId: auto.id,
-      monthKey,
-      weekdayKey,
-    },
+    where: { autoCampaignId: auto.id, runDateET },
   });
 
   if (existingRun) {
@@ -170,9 +280,9 @@ export async function POST(req: Request) {
       {
         ok: true,
         skipped: true,
-        reason: "Already ran for this weekday in this month",
+        reason: "Already ran for this ET date",
         existingRun,
-        monthKey,
+        runDateET,
         weekdayKey,
         et,
       },
@@ -185,6 +295,15 @@ export async function POST(req: Request) {
   if (!template) {
     return NextResponse.json(
       { error: "AutoCampaign template not found. Re-save AutoCampaign settings." },
+      { status: 400 }
+    );
+  }
+
+  // Step D: parse addresses now
+  const addresses = parseAddresses(auto.addressesText);
+  if (addresses.length === 0) {
+    return NextResponse.json(
+      { error: "AutoCampaign addressesText is empty. Paste one address per line and Save." },
       { status: 400 }
     );
   }
@@ -206,15 +325,9 @@ export async function POST(req: Request) {
   // bucket for today
   const bucketContacts = contacts.filter((c) => c.id % 5 === bucketIndex);
 
-  // if empty bucket, still record run to avoid repeated attempts
   if (bucketContacts.length === 0) {
     const run = await prisma.autoCampaignRun.create({
-      data: {
-        autoCampaignId: auto.id,
-        monthKey,
-        weekdayKey,
-        queuedCount: 0,
-      },
+      data: { autoCampaignId: auto.id, runDateET, weekdayKey, queuedCount: 0 },
     });
 
     return NextResponse.json({
@@ -222,13 +335,14 @@ export async function POST(req: Request) {
       queued: 0,
       campaignId: null,
       runId: run.id,
-      monthKey,
+      runDateET,
       weekdayKey,
       bucketIndex,
       contactsTotal: contacts.length,
       bucketContacts: 0,
       et,
       note: "Bucket had 0 contacts",
+      forced: force,
     });
   }
 
@@ -236,18 +350,22 @@ export async function POST(req: Request) {
   const campaign = await prisma.campaign.create({
     data: {
       categoryId: auto.categoryId,
-      phaseNumber: 999, // reserved for auto runs
+      phaseNumber: 999,
       templateId: auto.templateId,
       status: "queued",
     },
   });
 
-  // queue SendLogs
-  const logsData = bucketContacts.map((c) => ({
-    campaignId: campaign.id,
-    contactId: c.id,
-    status: "queued",
-  }));
+  // queue SendLogs + store chosen address in meta
+  const logsData = bucketContacts.map((c) => {
+    const address = pickAddress(addresses, c.id, runDateET);
+    return {
+      campaignId: campaign.id,
+      contactId: c.id,
+      status: "queued",
+      meta: { address }, // ✅ Step D: persist the chosen address
+    };
+  });
 
   const result = await prisma.sendLog.createMany({ data: logsData });
 
@@ -255,7 +373,7 @@ export async function POST(req: Request) {
   const run = await prisma.autoCampaignRun.create({
     data: {
       autoCampaignId: auto.id,
-      monthKey,
+      runDateET,
       weekdayKey,
       queuedCount: result.count,
       campaignId: campaign.id,
@@ -265,7 +383,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     ok: true,
     forced: force,
-    monthKey,
+    runDateET,
     weekdayKey,
     bucketIndex,
     contactsTotal: contacts.length,
@@ -274,5 +392,10 @@ export async function POST(req: Request) {
     campaignId: campaign.id,
     runId: run.id,
     et,
+    window: {
+      windowStartET: auto.windowStartET,
+      windowEndET: auto.windowEndET,
+    },
+    addressesCount: addresses.length,
   });
 }

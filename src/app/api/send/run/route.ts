@@ -16,6 +16,23 @@ function safeStr(x: unknown) {
   return String(x ?? "").slice(0, 2000);
 }
 
+function safeMetaAddress(meta: unknown) {
+  // Prisma Json can be object | array | string | null
+  if (!meta || typeof meta !== "object") return "";
+  const addr = (meta as any)?.address;
+  return typeof addr === "string" ? addr : "";
+}
+
+function replaceAllTokens(html: string, vars: Record<string, string>) {
+  let out = html || "";
+  for (const [k, v] of Object.entries(vars)) {
+    // Replace {{token}} literally (global)
+    const re = new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, "g");
+    out = out.replace(re, v);
+  }
+  return out;
+}
+
 async function mailgunSend(opts: {
   from: string;
   to: string;
@@ -27,7 +44,7 @@ async function mailgunSend(opts: {
 }) {
   const API_KEY = process.env.MAILGUN_API_KEY || "";
   const DOMAIN = process.env.MAILGUN_DOMAIN || "";
-  const BASE = process.env.MAILGUN_BASE_URL || "https://api.mailgun.net"; // <-- matches your env
+  const BASE = process.env.MAILGUN_BASE_URL || "https://api.mailgun.net";
 
   if (!API_KEY) throw new Error("Missing MAILGUN_API_KEY in .env");
   if (!DOMAIN) throw new Error("Missing MAILGUN_DOMAIN in .env");
@@ -96,10 +113,7 @@ export async function POST(req: Request) {
   }
 
   if (!from) {
-    return NextResponse.json(
-      { error: "Missing MAIL_FROM in .env" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Missing MAIL_FROM in .env" }, { status: 500 });
   }
 
   if (!process.env.MAILGUN_API_KEY || !process.env.MAILGUN_DOMAIN) {
@@ -123,10 +137,7 @@ export async function POST(req: Request) {
   }
 
   if (campaign.status === "done") {
-    return NextResponse.json(
-      { error: "Campaign already done" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Campaign already done" }, { status: 400 });
   }
 
   // Pull next queued logs for this campaign
@@ -171,7 +182,7 @@ export async function POST(req: Request) {
     });
   }
 
-  // DRY RUN: show recipients only
+  // DRY RUN: show recipients + chosen address
   if (dryRun) {
     return NextResponse.json({
       dryRun: true,
@@ -186,6 +197,7 @@ export async function POST(req: Request) {
         sendLogId: l.id,
         contactId: l.contactId,
         email: l.contact.email,
+        address: safeMetaAddress((l as any).meta),
       })),
     });
   }
@@ -200,11 +212,17 @@ export async function POST(req: Request) {
     const to = log.contact.email;
 
     const token = makeUnsubToken(log.contactId);
-    const unsubUrl = `${appUrl}/api/unsubscribe?token=${encodeURIComponent(
-      token
-    )}`;
+    const unsubUrl = `${appUrl}/api/unsubscribe?token=${encodeURIComponent(token)}`;
 
-    const html = `${baseHtml}
+    // Step D: pull address from meta and replace {{address}}
+    const address = safeMetaAddress((log as any).meta);
+
+    // Replace tokens BEFORE appending footer
+    const htmlWithTokens = replaceAllTokens(baseHtml, {
+      address,
+    });
+
+    const finalHtml = `${htmlWithTokens}
 <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
 <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#777;line-height:1.4;">
   <div>You’re receiving this because you’re on our contractor list.</div>
@@ -218,7 +236,7 @@ export async function POST(req: Request) {
         from,
         to,
         subject,
-        html,
+        html: finalHtml,
         replyTo: "support@buildersbidbook.com",
         listUnsubUrl: unsubUrl,
         tags: [`campaign:${campaignId}`],
@@ -238,10 +256,8 @@ export async function POST(req: Request) {
       });
     } catch (e: any) {
       failed++;
-
       const msg = safeStr(e?.message || e || "Unknown error");
 
-      // Make sure failures always get recorded.
       try {
         await prisma.sendLog.update({
           where: { id: log.id },
@@ -253,7 +269,7 @@ export async function POST(req: Request) {
           },
         });
       } catch {
-        // if DB write fails, still return a helpful response later
+        // swallow
       }
     }
   }

@@ -74,6 +74,7 @@ model SendLog {
   providerMessageId String? // Mailgun's id, Resend's id, etc.
   error             String?
   sentAt            DateTime?
+  meta              Json? // NEW: store { address: "..." } etc.
   createdAt         DateTime  @default(now())
 
   @@index([campaignId, status])
@@ -82,7 +83,7 @@ model SendLog {
 
 /**
  * Auto Campaigns
- * - monthly schedule
+ * - 30-day window schedule (start -> +30 days)
  * - uses a Category as the contact list (MVP)
  * - stores pasted addresses (one per line)
  * - uses ONE fixed template (Project Invite (Auto))
@@ -101,11 +102,15 @@ model AutoCampaign {
   // Paste box: one address per line
   addressesText String @db.Text
 
-  // Monthly schedule (simple + safe)
-  // Recommend keeping dayOfMonth <= 28 to avoid month length issues
+  // User-input schedule preferences (for choosing window start + daily send time)
+  // Recommend dayOfMonth <= 28 to avoid month length issues
   dayOfMonth   Int @default(1) // 1..28 recommended
   sendHourET   Int @default(9) // 0..23
   sendMinuteET Int @default(0) // 0..59
+
+  // 30-day drip window boundaries (ET-based schedule, stored as DateTime)
+  windowStartET DateTime?
+  windowEndET   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -123,18 +128,19 @@ model AutoCampaignRun {
   autoCampaignId Int
   autoCampaign   AutoCampaign @relation(fields: [autoCampaignId], references: [id])
 
-  // Tracking keys:
-  // monthKey example: "2026-01"
-  monthKey   String
+  // One run per day (ET date string)
+  // example: "2026-01-06"
+  runDateET String
+
   // weekdayKey: "mon" | "tue" | "wed" | "thu" | "fri"
   weekdayKey String
 
-  ranAt DateTime @default(now())
-
-  queuedCount Int @default(0)
+  ranAt       DateTime @default(now())
+  queuedCount Int      @default(0)
 
   // optional: link to the regular Campaign created for this run
   campaignId Int?
 
-  @@index([autoCampaignId, monthKey, weekdayKey])
+  @@unique([autoCampaignId, runDateET])
+  @@index([autoCampaignId, weekdayKey])
 }
