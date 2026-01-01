@@ -2,15 +2,12 @@
   "name": "bbb-mailer",
   "version": "0.1.0",
   "private": true,
-"scripts": {
-  "dev": "next dev",
-  "build": "prisma generate --schema=prisma/schema.prisma && next build",
-  "start": "next start",
-  "lint": "next lint"
-}
-,
-
-
+  "scripts": {
+    "dev": "next dev -H 127.0.0.1 -p 3000",
+    "build": "prisma generate --schema=prisma/schema.prisma && next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
   "dependencies": {
     "@prisma/client": "^6.19.1",
     "form-data": "^4.0.5",

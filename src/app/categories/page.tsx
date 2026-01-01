@@ -371,7 +371,7 @@ b@y.com,XYZ Builders`}
                 {importResult.invalid?.length ? (
                   <div className="mt-4">
                     <div className="text-xs font-semibold text-slate-700">
-                      Sample invalid emails (first 25)
+                      Sample invalid emails (first 50)
                     </div>
                     <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-slate-200 bg-white p-3 text-xs text-slate-800">
                       {JSON.stringify(importResult.invalid, null, 2)}

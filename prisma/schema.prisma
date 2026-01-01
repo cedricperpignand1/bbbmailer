@@ -7,7 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model Category {
   id        Int        @id @default(autoincrement())
   name      String     @unique
@@ -15,6 +14,9 @@ model Category {
   contacts  Contact[]
   campaigns Campaign[]
   createdAt DateTime   @default(now())
+
+  // Auto Campaigns (MVP uses Category as the "list")
+  autoCampaigns AutoCampaign[]
 }
 
 model Contact {
@@ -40,6 +42,9 @@ model Template {
   createdAt DateTime @default(now())
 
   campaigns Campaign[]
+
+  // Auto Campaigns use ONE fixed template
+  autoCampaigns AutoCampaign[]
 }
 
 model Campaign {
@@ -64,13 +69,72 @@ model SendLog {
   contactId  Int
   contact    Contact  @relation(fields: [contactId], references: [id])
 
-  status            String   @default("queued") // queued|sent|failed
-  provider          String   @default("mailgun") // mailgun|resend|ses|etc
-  providerMessageId String?  // Mailgun's id, Resend's id, etc.
+  status            String    @default("queued") // queued|sent|failed
+  provider          String    @default("mailgun") // mailgun|resend|ses|etc
+  providerMessageId String? // Mailgun's id, Resend's id, etc.
   error             String?
   sentAt            DateTime?
-  createdAt         DateTime @default(now())
+  createdAt         DateTime  @default(now())
 
   @@index([campaignId, status])
   @@index([provider])
+}
+
+/**
+ * Auto Campaigns
+ * - monthly schedule
+ * - uses a Category as the contact list (MVP)
+ * - stores pasted addresses (one per line)
+ * - uses ONE fixed template (Project Invite (Auto))
+ */
+model AutoCampaign {
+  id     Int     @id @default(autoincrement())
+  name   String  @default("Monthly Project Invites")
+  active Boolean @default(true)
+
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  templateId Int
+  template   Template @relation(fields: [templateId], references: [id])
+
+  // Paste box: one address per line
+  addressesText String @db.Text
+
+  // Monthly schedule (simple + safe)
+  // Recommend keeping dayOfMonth <= 28 to avoid month length issues
+  dayOfMonth   Int @default(1) // 1..28 recommended
+  sendHourET   Int @default(9) // 0..23
+  sendMinuteET Int @default(0) // 0..59
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs AutoCampaignRun[]
+
+  @@index([active])
+  @@index([categoryId])
+  @@index([templateId])
+}
+
+model AutoCampaignRun {
+  id Int @id @default(autoincrement())
+
+  autoCampaignId Int
+  autoCampaign   AutoCampaign @relation(fields: [autoCampaignId], references: [id])
+
+  // Tracking keys:
+  // monthKey example: "2026-01"
+  monthKey   String
+  // weekdayKey: "mon" | "tue" | "wed" | "thu" | "fri"
+  weekdayKey String
+
+  ranAt DateTime @default(now())
+
+  queuedCount Int @default(0)
+
+  // optional: link to the regular Campaign created for this run
+  campaignId Int?
+
+  @@index([autoCampaignId, monthKey, weekdayKey])
 }

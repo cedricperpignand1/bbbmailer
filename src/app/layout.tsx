@@ -60,6 +60,8 @@ export default function RootLayout({
                 <NavLink href="/categories" label="Contacts" />
                 <NavLink href="/templates" label="Templates" />
                 <NavLink href="/campaigns" label="Campaigns" />
+                <NavLink href="/auto-campaigns" label="Auto Campaigns" />
+
               </nav>
 
               {/* Version */}
