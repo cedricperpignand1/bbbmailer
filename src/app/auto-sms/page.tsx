@@ -159,27 +159,55 @@ export default function AutoSmsPage() {
             <p className="text-slate-200">
               No Auto SMS record yet. Click below to create it with defaults.
             </p>
-            <button
-              onClick={async () => {
-                setLoading(true);
-                try {
-                  const r = await fetch("/api/auto-sms/upsert", {
-                    method: "POST",
-                    headers: { "content-type": "application/json" },
-                    body: JSON.stringify({}),
-                  });
-                  const j = await r.json();
-                  if (!j.ok) alert(j.error || "Create failed");
-                  await refresh();
-                } finally {
-                  setLoading(false);
-                }
-              }}
-              className="mt-4 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-white"
-              disabled={loading}
-            >
-              Create Auto SMS
-            </button>
+            
+<button
+  onClick={async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/auto-sms/upsert", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      const text = await r.text();
+
+      if (!r.ok) {
+        alert(`Create failed (${r.status}):\n\n${text}`);
+        return;
+      }
+
+      let j: any = null;
+      try {
+        j = JSON.parse(text);
+      } catch {
+        alert(`Create failed (bad JSON):\n\n${text}`);
+        return;
+      }
+
+      if (!j?.ok) {
+        alert(j?.error || "Create failed");
+        return;
+      }
+
+      await refresh();
+    } catch (e: any) {
+      alert(`Create failed (exception):\n\n${String(e?.message ?? e)}`);
+    } finally {
+      setLoading(false);
+    }
+  }}
+  className="mt-4 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-white"
+  disabled={loading}
+>
+  Create Auto SMS
+</button>
+
+
+
+
+
+
           </div>
         ) : (
           <div className="mt-8 grid gap-6 lg:grid-cols-2">
