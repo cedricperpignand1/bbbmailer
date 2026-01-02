@@ -31,8 +31,23 @@ function safeErr(e: unknown) {
       : typeof e === "string"
       ? e
       : JSON.stringify(e);
-
   return String(msg ?? "Unknown error").slice(0, 2000);
+}
+
+async function coerceCategoryId(input: unknown): Promise<number | null> {
+  // Accept null/undefined/empty => null
+  if (input === null || input === undefined) return null;
+
+  const n = Number(input);
+  if (!Number.isFinite(n) || n <= 0) return null;
+
+  // Only allow if category actually exists (prevents FK crash)
+  const exists = await prisma.category.findUnique({
+    where: { id: n },
+    select: { id: true },
+  });
+
+  return exists ? n : null;
 }
 
 export async function POST(req: Request) {
@@ -41,16 +56,24 @@ export async function POST(req: Request) {
 
     const existing = await prisma.autoSmsCampaign.findFirst({ orderBy: { id: "asc" } });
 
+    // Decide which categoryId we want to use:
+    // - If client sent categoryId, validate it
+    // - Else keep existing categoryId ONLY IF it still exists
+    const desiredCategoryId =
+  body.categoryId !== undefined
+    ? await coerceCategoryId(body.categoryId)
+    : await coerceCategoryId(existing?.categoryId ?? null);
+
+
     const payload = {
       name: String(body.name ?? existing?.name ?? "Monthly Project SMS"),
       active: Boolean(body.active ?? existing?.active ?? true),
-      categoryId:
-        body.categoryId === null
-          ? null
-          : Number(body.categoryId ?? existing?.categoryId ?? null),
+      categoryId: desiredCategoryId,
+
       dayOfMonth: clampInt(body.dayOfMonth ?? existing?.dayOfMonth ?? 1, 1, 31, 1),
       sendHourET: clampInt(body.sendHourET ?? existing?.sendHourET ?? 9, 0, 23, 9),
       sendMinuteET: clampInt(body.sendMinuteET ?? existing?.sendMinuteET ?? 0, 0, 59, 0),
+
       fromNumber: String(body.fromNumber ?? existing?.fromNumber ?? defaultFromNumber() ?? ""),
       messageTemplate: String(
         body.messageTemplate ??
@@ -61,7 +84,6 @@ export async function POST(req: Request) {
       stopAfterDays: clampInt(body.stopAfterDays ?? existing?.stopAfterDays ?? 30, 1, 365, 30),
     };
 
-    // set startAt when transitioning inactive -> active (or first create)
     const shouldStart = payload.active && (!existing?.startAt || existing.active === false);
 
     const auto = existing
@@ -81,7 +103,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, auto });
   } catch (e) {
-    // VERY IMPORTANT: log for Vercel function logs
     console.error("AUTO_SMS_UPSERT_ERROR:", e);
 
     return NextResponse.json(
@@ -89,7 +110,7 @@ export async function POST(req: Request) {
         ok: false,
         error: safeErr(e),
         hint:
-          "Most common: DATABASE_URL missing on Vercel, or Prisma tables not deployed (run migrations/db push).",
+          "FK error means categoryId points to a Category ID that doesn’t exist in this DB. Create a Category in prod or pick one in the UI.",
       },
       { status: 500 }
     );
