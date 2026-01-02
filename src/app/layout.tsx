@@ -1,63 +1,11 @@
-"use client";
-
 import "./globals.css";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import TopNav from "@/components/TopNav";
 
 export const metadata = {
   title: "BBB Mailer",
   description: "BBB Mailer MVP",
 };
-
-function NavLink({
-  href,
-  label,
-  highlight,
-}: {
-  href: string;
-  label: string;
-  highlight?: boolean;
-}) {
-  const pathname = usePathname();
-  const isActive = pathname === href;
-
-  // 🔥 Yellow highlighted tab (Auto SMS)
-  if (highlight) {
-    return (
-      <Link
-        href={href}
-        className={`
-          rounded-xl px-3 py-2 text-sm font-semibold transition
-          ${
-            isActive
-              ? "bg-gradient-to-br from-yellow-300 to-yellow-500 text-black shadow-[0_0_20px_rgba(250,204,21,0.5)]"
-              : "bg-yellow-400/20 text-yellow-300 hover:bg-yellow-400/30"
-          }
-        `}
-      >
-        {label}
-      </Link>
-    );
-  }
-
-  // Normal tabs
-  return (
-    <Link
-      href={href}
-      className={`
-        rounded-xl px-3 py-2 text-sm font-medium transition
-        ${
-          isActive
-            ? "bg-white/20 text-white"
-            : "text-white/80 hover:text-white hover:bg-white/15"
-        }
-        focus:outline-none focus:ring-2 focus:ring-cyan-400/40
-      `}
-    >
-      {label}
-    </Link>
-  );
-}
 
 export default function RootLayout({
   children,
@@ -83,23 +31,13 @@ export default function RootLayout({
               <Link href="/" className="flex items-center gap-2">
                 <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-cyan-400 to-indigo-500" />
                 <div className="leading-tight">
-                  <div className="text-sm font-semibold text-white">
-                    BBB Mailer
-                  </div>
+                  <div className="text-sm font-semibold text-white">BBB Mailer</div>
                   <div className="text-xs text-white/60">Local MVP</div>
                 </div>
               </Link>
 
-              {/* Tabs */}
-              <nav className="hidden md:flex items-center gap-1 rounded-2xl bg-white/10 p-1 border border-white/10">
-                <NavLink href="/categories" label="Contacts" />
-                <NavLink href="/templates" label="Templates" />
-                <NavLink href="/campaigns" label="Campaigns" />
-                <NavLink href="/auto-campaigns" label="Auto Campaigns" />
-
-                {/* 🟡 Auto SMS Highlighted */}
-                <NavLink href="/auto-sms" label="Auto SMS" highlight />
-              </nav>
+              {/* Tabs (client component handles active + yellow tab) */}
+              <TopNav />
 
               {/* Version */}
               <div className="flex items-center gap-2">
@@ -111,9 +49,7 @@ export default function RootLayout({
 
             {/* Page content area */}
             <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-[0_20px_60px_-30px_rgba(0,0,0,0.8)] backdrop-blur">
-              <div className="rounded-2xl bg-white p-5">
-                {children}
-              </div>
+              <div className="rounded-2xl bg-white p-5">{children}</div>
             </div>
 
             {/* Footer */}
