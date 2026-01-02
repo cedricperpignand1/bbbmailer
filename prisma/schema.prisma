@@ -16,7 +16,9 @@ model Category {
   createdAt DateTime   @default(now())
 
   // Auto Campaigns (MVP uses Category as the "list")
-  autoCampaigns AutoCampaign[]
+  autoCampaigns    AutoCampaign[]
+  phoneContacts    PhoneContact[]
+  autoSmsCampaigns AutoSmsCampaign[]
 }
 
 model Contact {
@@ -143,4 +145,92 @@ model AutoCampaignRun {
 
   @@unique([autoCampaignId, runDateET])
   @@index([autoCampaignId, weekdayKey])
+}
+
+model PhoneContact {
+  id         Int      @id @default(autoincrement())
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  phone       String // store E.164 if possible: +13055551212
+  status      String       @default("active") // active|invalid|unsubscribed|complained
+  createdAt   DateTime     @default(now())
+  smsSendLogs SmsSendLog[]
+
+  // prevent duplicates inside the same list/category
+  @@unique([categoryId, phone])
+  @@index([categoryId, status])
+}
+
+model AutoSmsCampaign {
+  id     Int     @id @default(autoincrement())
+  name   String
+  active Boolean @default(true)
+
+  // "List" is Category (same pattern as your email auto campaigns)
+  categoryId Int?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  // schedule (ET)
+  dayOfMonth   Int @default(1)
+  sendHourET   Int @default(9)
+  sendMinuteET Int @default(0)
+
+  // Twilio from-number (E.164)
+  fromNumber String @default("")
+
+  // message template, supports {{address}}
+  messageTemplate String @default("Hi — project starting at {{address}}. Reply STOP to opt out.")
+
+  // addresses (one per line)
+  addressesText String @default("")
+  addressIndex  Int    @default(0)
+
+  // auto-stop after N days from activation
+  startAt       DateTime?
+  stopAfterDays Int       @default(30)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs     AutoSmsRun[]
+  sendLogs SmsSendLog[]
+}
+
+model AutoSmsRun {
+  id                Int             @id @default(autoincrement())
+  autoSmsCampaignId Int
+  autoSmsCampaign   AutoSmsCampaign @relation(fields: [autoSmsCampaignId], references: [id])
+
+  // prevent duplicates per month + weekday bucket
+  monthKey   String
+  weekdayKey Int // 0..4 (Mon..Fri)
+
+  ranAt     DateTime @default(now())
+  sentCount Int      @default(0)
+  error     String?
+
+  @@unique([autoSmsCampaignId, monthKey, weekdayKey])
+  @@index([autoSmsCampaignId, ranAt])
+}
+
+model SmsSendLog {
+  id                Int             @id @default(autoincrement())
+  autoSmsCampaignId Int
+  autoSmsCampaign   AutoSmsCampaign @relation(fields: [autoSmsCampaignId], references: [id])
+
+  phoneContactId Int?
+  phoneContact   PhoneContact? @relation(fields: [phoneContactId], references: [id])
+
+  toPhone   String
+  fromPhone String
+  body      String
+
+  status            String    @default("queued") // queued|sent|failed
+  providerMessageId String?
+  error             String?
+  sentAt            DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([autoSmsCampaignId, status, createdAt])
 }
