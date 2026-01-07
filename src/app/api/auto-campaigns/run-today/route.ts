@@ -4,31 +4,6 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/**
- * Auto Campaign runner (Scheduled + Manual)
- *
- * - Scheduled mode (default):
- *   - Only runs Mon–Fri
- *   - Only runs if today ET is within [auto.windowStartET, auto.windowEndET)
- *   - Only runs if ET time is within +/- 10 minutes of auto.sendHourET:auto.sendMinuteET
- *
- * - Manual mode:
- *   - Add ?force=1 to bypass schedule checks (time + window), still Mon–Fri bucket logic
- *
- * - Contact bucketing:
- *   contact.id % 5 -> Mon..Fri
- *     mon=0, tue=1, wed=2, thu=3, fri=4
- *
- * - Prevent duplicates:
- *   AutoCampaignRun has @@unique([autoCampaignId, runDateET])
- *   so we block duplicates by today's ET date string.
- *
- * - Step D (Address randomization):
- *   - Parse auto.addressesText (one per line)
- *   - For each contact queued today, pick a deterministic "random" address
- *   - Save it to SendLog.meta = { address: "..." }
- */
-
 function weekdayKeyFromEtParts(p: { weekday: string }) {
   const w = p.weekday.toLowerCase();
   if (w.startsWith("mon")) return "mon";
@@ -68,15 +43,15 @@ function getEtParts(now = new Date()) {
     if (p.type !== "literal") map[p.type] = p.value;
   }
 
-  const year = Number(map.year);
-  const month = Number(map.month);
-  const day = Number(map.day);
-  const hour = Number(map.hour);
-  const minute = Number(map.minute);
-  const second = Number(map.second ?? "0");
-  const weekday = map.weekday || "Mon";
-
-  return { year, month, day, hour, minute, second, weekday };
+  return {
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+    hour: Number(map.hour),
+    minute: Number(map.minute),
+    second: Number(map.second ?? "0"),
+    weekday: map.weekday || "Mon",
+  };
 }
 
 function minutes(h: number, m: number) {
@@ -85,12 +60,10 @@ function minutes(h: number, m: number) {
 
 function yyyyMmDdFromEt(et: { year: number; month: number; day: number }) {
   const y = et.year;
-  const m = String(et.month).padStart(2, "0");
+  const mo = String(et.month).padStart(2, "0");
   const d = String(et.day).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return `${y}-${mo}-${d}`;
 }
-
-/* ===== Helpers to get "ET midnight" as a UTC Date for comparisons ===== */
 
 const ET_TZ = "America/New_York";
 
@@ -121,7 +94,7 @@ function getZonedParts(d: Date, timeZone: string) {
 
 function zonedTimeToUtc(
   year: number,
-  month: number, // 1-12
+  month: number,
   day: number,
   hour: number,
   minute: number,
@@ -133,15 +106,7 @@ function zonedTimeToUtc(
   for (let i = 0; i < 5; i++) {
     const z = getZonedParts(utc, timeZone);
 
-    const actualLocalEpoch = Date.UTC(
-      z.year,
-      z.month - 1,
-      z.day,
-      z.hour,
-      z.minute,
-      z.second
-    );
-
+    const actualLocalEpoch = Date.UTC(z.year, z.month - 1, z.day, z.hour, z.minute, z.second);
     const desiredLocalEpoch = Date.UTC(year, month - 1, day, hour, minute, second);
 
     const diffMs = desiredLocalEpoch - actualLocalEpoch;
@@ -153,8 +118,6 @@ function zonedTimeToUtc(
   return utc;
 }
 
-/* ================= Step D helpers ================= */
-
 function parseAddresses(addressesText: string) {
   return String(addressesText || "")
     .split(/\r?\n/)
@@ -164,7 +127,6 @@ function parseAddresses(addressesText: string) {
 }
 
 function yyyymmddNumber(runDateET: string) {
-  // "2026-01-06" -> 20260106
   const n = Number(String(runDateET).replaceAll("-", ""));
   return Number.isFinite(n) ? n : 0;
 }
@@ -191,7 +153,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // MVP: use most recent active AutoCampaign
   const auto = await prisma.autoCampaign.findFirst({
     where: { active: true },
     orderBy: { createdAt: "desc" },
@@ -218,7 +179,6 @@ export async function POST(req: Request) {
 
   const runDateET = yyyyMmDdFromEt(et);
 
-  // scheduled checks (unless force=1)
   if (!force) {
     const todayMidnightET_UTC = zonedTimeToUtc(et.year, et.month, et.day, 0, 0, 0, ET_TZ);
 
@@ -235,10 +195,7 @@ export async function POST(req: Request) {
           runDateET,
           weekdayKey,
           et,
-          window: {
-            windowStartET: auto.windowStartET,
-            windowEndET: auto.windowEndET,
-          },
+          window: { windowStartET: auto.windowStartET, windowEndET: auto.windowEndET },
         },
         { status: 200 }
       );
@@ -253,12 +210,7 @@ export async function POST(req: Request) {
         {
           ok: true,
           skipped: true,
-          reason: `Outside scheduled time window (+/-10m). Now (ET) ${et.hour}:${String(
-            et.minute
-          ).padStart(2, "0")}, scheduled ${auto.sendHourET}:${String(auto.sendMinuteET).padStart(
-            2,
-            "0"
-          )}.`,
+          reason: "Outside scheduled time window (+/-10m)",
           runDateET,
           weekdayKey,
           et,
@@ -270,7 +222,6 @@ export async function POST(req: Request) {
     }
   }
 
-  // prevent duplicates: one run per ET date
   const existingRun = await prisma.autoCampaignRun.findFirst({
     where: { autoCampaignId: auto.id, runDateET },
   });
@@ -290,7 +241,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // confirm template exists
   const template = await prisma.template.findUnique({ where: { id: auto.templateId } });
   if (!template) {
     return NextResponse.json(
@@ -299,7 +249,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // Step D: parse addresses now
   const addresses = parseAddresses(auto.addressesText);
   if (addresses.length === 0) {
     return NextResponse.json(
@@ -308,7 +257,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // load active contacts
   const contacts = await prisma.contact.findMany({
     where: { categoryId: auto.categoryId, status: "active" },
     select: { id: true },
@@ -322,7 +270,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // bucket for today
   const bucketContacts = contacts.filter((c) => c.id % 5 === bucketIndex);
 
   if (bucketContacts.length === 0) {
@@ -346,7 +293,6 @@ export async function POST(req: Request) {
     });
   }
 
-  // create normal Campaign (shows on Campaigns page)
   const campaign = await prisma.campaign.create({
     data: {
       categoryId: auto.categoryId,
@@ -356,20 +302,18 @@ export async function POST(req: Request) {
     },
   });
 
-  // queue SendLogs + store chosen address in meta
   const logsData = bucketContacts.map((c) => {
     const address = pickAddress(addresses, c.id, runDateET);
     return {
       campaignId: campaign.id,
       contactId: c.id,
       status: "queued",
-      meta: { address }, // ✅ Step D: persist the chosen address
+      meta: { address },
     };
   });
 
   const result = await prisma.sendLog.createMany({ data: logsData });
 
-  // record run
   const run = await prisma.autoCampaignRun.create({
     data: {
       autoCampaignId: auto.id,
@@ -392,10 +336,7 @@ export async function POST(req: Request) {
     campaignId: campaign.id,
     runId: run.id,
     et,
-    window: {
-      windowStartET: auto.windowStartET,
-      windowEndET: auto.windowEndET,
-    },
+    window: { windowStartET: auto.windowStartET, windowEndET: auto.windowEndET },
     addressesCount: addresses.length,
   });
 }

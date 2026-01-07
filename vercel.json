@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/auto-campaigns/cron?key=@auto_cron_key",
+      "path": "/api/auto-campaigns/cron",
       "schedule": "*/5 * * * 1-5"
     }
   ]

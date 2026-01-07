@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 type CategoryRow = {
   id: number;
@@ -25,7 +25,7 @@ type AutoCampaignRow =
       categoryId: number;
       templateId: number;
       addressesText: string;
-      dayOfMonth: number;
+      dayOfMonth: number; // 0 = every weekday
       sendHourET: number;
       sendMinuteET: number;
       createdAt: string;
@@ -99,16 +99,19 @@ export default function AutoCampaignsPage() {
   const [autoCampaign, setAutoCampaign] = useState<AutoCampaignRow>(null);
   const [runs, setRuns] = useState<AutoRunRow[]>([]);
 
-  // NEW: run-today UI
+  // Run UI
   const [running, setRunning] = useState(false);
   const [lastRunResult, setLastRunResult] = useState<any>(null);
+
+  // AbortController for cancel
+  const runAbortRef = useRef<AbortController | null>(null);
 
   // form state
   const [name, setName] = useState("Monthly Project Invites");
   const [active, setActive] = useState(true);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [addressesText, setAddressesText] = useState("");
-  const [dayOfMonth, setDayOfMonth] = useState(1);
+  const [dayOfMonth, setDayOfMonth] = useState(0); // default to daily mode
   const [sendHourET, setSendHourET] = useState(9);
   const [sendMinuteET, setSendMinuteET] = useState(0);
 
@@ -119,6 +122,7 @@ export default function AutoCampaignsPage() {
     setLoading(true);
     setError(null);
     setOkMsg(null);
+
     try {
       const res = await fetch("/api/auto-campaigns", { cache: "no-store" });
       const data = await res.json();
@@ -135,7 +139,7 @@ export default function AutoCampaignsPage() {
         setActive(Boolean(ac.active));
         setCategoryId(ac.categoryId ?? null);
         setAddressesText(ac.addressesText || "");
-        setDayOfMonth(ac.dayOfMonth ?? 1);
+        setDayOfMonth(typeof ac.dayOfMonth === "number" ? ac.dayOfMonth : 0);
         setSendHourET(ac.sendHourET ?? 9);
         setSendMinuteET(ac.sendMinuteET ?? 0);
       } else {
@@ -145,7 +149,7 @@ export default function AutoCampaignsPage() {
         setName("Monthly Project Invites");
         setActive(true);
         setAddressesText("");
-        setDayOfMonth(1);
+        setDayOfMonth(0); // daily by default
         setSendHourET(9);
         setSendMinuteET(0);
       }
@@ -183,7 +187,10 @@ export default function AutoCampaignsPage() {
       active: Boolean(active),
       categoryId: catId,
       addressesText: normalized,
-      dayOfMonth: clampInt(Number(dayOfMonth), 1, 28),
+
+      // 0 = every weekday, 1–28 = monthly
+      dayOfMonth: clampInt(Number(dayOfMonth), 0, 28),
+
       sendHourET: clampInt(Number(sendHourET), 0, 23),
       sendMinuteET: clampInt(Number(sendMinuteET), 0, 59),
     };
@@ -207,8 +214,12 @@ export default function AutoCampaignsPage() {
     }
   }
 
-  // NEW: run-today action (queues weekday bucket)
   async function runToday() {
+    // cancel any previous run request
+    runAbortRef.current?.abort();
+    const controller = new AbortController();
+    runAbortRef.current = controller;
+
     setRunning(true);
     setError(null);
     setOkMsg(null);
@@ -218,6 +229,7 @@ export default function AutoCampaignsPage() {
       const res = await fetch("/api/auto-campaigns/run-today?force=1", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
       });
 
       const data = await res.json();
@@ -236,11 +248,20 @@ export default function AutoCampaignsPage() {
       }
 
       await loadAll();
-    } catch {
+    } catch (e: any) {
+      if (e?.name === "AbortError") {
+        setOkMsg("Canceled.");
+        return;
+      }
       setError("Run failed");
     } finally {
       setRunning(false);
+      runAbortRef.current = null;
     }
+  }
+
+  function cancelRun() {
+    runAbortRef.current?.abort();
   }
 
   const selectedCategory = useMemo(
@@ -264,7 +285,7 @@ export default function AutoCampaignsPage() {
             Auto Campaigns
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Monthly scheduled project invites (contacts split Mon–Fri and reused weekly).
+            Daily/Monthly scheduled project invites (contacts split Mon–Fri and reused weekly).
           </p>
         </div>
 
@@ -275,6 +296,15 @@ export default function AutoCampaignsPage() {
             disabled={loading || running}
           >
             Refresh
+          </button>
+
+          <button
+            className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 hover:bg-red-100 disabled:opacity-60"
+            onClick={cancelRun}
+            disabled={!running}
+            title="Cancel the current run request"
+          >
+            Cancel
           </button>
 
           <button
@@ -382,13 +412,18 @@ export default function AutoCampaignsPage() {
                   <div className="text-xs font-semibold text-slate-700">Day of month</div>
                   <input
                     type="number"
-                    min={1}
+                    min={0}
                     max={28}
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
                     value={dayOfMonth}
                     onChange={(e) => setDayOfMonth(Number(e.target.value))}
+                    title="0 = every weekday. 1–28 = only on that day each month."
                   />
+                  <div className="mt-1 text-xs text-slate-500">
+                    Use <code>0</code> to run <b>every weekday</b>. Use <code>1–28</code> to run monthly.
+                  </div>
                 </div>
+
                 <div>
                   <div className="text-xs font-semibold text-slate-700">Hour (ET)</div>
                   <input
@@ -400,6 +435,7 @@ export default function AutoCampaignsPage() {
                     onChange={(e) => setSendHourET(Number(e.target.value))}
                   />
                 </div>
+
                 <div>
                   <div className="text-xs font-semibold text-slate-700">Minute</div>
                   <input
