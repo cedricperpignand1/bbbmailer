@@ -78,7 +78,7 @@ export async function POST(req: Request) {
       messageTemplate: String(
         body.messageTemplate ??
           existing?.messageTemplate ??
-          "Hi — project starting at {{address}}. Reply STOP to opt out."
+          "Builders Bid Book: New construction project at {{address}}. Log in to view details and bid: https://buildersbidbook.com Reply STOP to opt out, HELP for help."
       ),
       addressesText: String(body.addressesText ?? existing?.addressesText ?? ""),
       stopAfterDays: clampInt(body.stopAfterDays ?? existing?.stopAfterDays ?? 30, 1, 365, 30),
