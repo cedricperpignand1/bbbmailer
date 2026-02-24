@@ -5,12 +5,22 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const categories = await prisma.category.findMany({
+  // Categories with phone count so the UI can show "347 numbers"
+  const rawCategories = await prisma.category.findMany({
     orderBy: { name: "asc" },
-    select: { id: true, name: true },
+    select: {
+      id: true,
+      name: true,
+      _count: { select: { phoneContacts: true } },
+    },
   });
 
-  // We keep MVP simple: 1 AutoSmsCampaign row (like your email auto page)
+  const categories = rawCategories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    phoneCount: c._count.phoneContacts,
+  }));
+
   const auto = await prisma.autoSmsCampaign.findFirst({
     orderBy: { id: "asc" },
   });
@@ -40,10 +50,11 @@ export async function GET() {
     ? await prisma.smsSendLog.findMany({
         where: { autoSmsCampaignId: auto.id },
         orderBy: { createdAt: "desc" },
-        take: 20,
+        take: 30,
         select: {
           id: true,
           toPhone: true,
+          body: true,
           status: true,
           error: true,
           createdAt: true,

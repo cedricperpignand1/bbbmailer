@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { defaultFromNumber } from "@/lib/twilio";
+import { defaultFromNumber } from "@/lib/telnyx";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
       categoryId: desiredCategoryId,
 
       dayOfMonth: clampInt(body.dayOfMonth ?? existing?.dayOfMonth ?? 1, 1, 31, 1),
-      sendHourET: clampInt(body.sendHourET ?? existing?.sendHourET ?? 9, 0, 23, 9),
+      sendHourET: clampInt(body.sendHourET ?? existing?.sendHourET ?? 11, 0, 23, 11),
       sendMinuteET: clampInt(body.sendMinuteET ?? existing?.sendMinuteET ?? 0, 0, 59, 0),
 
       fromNumber: String(body.fromNumber ?? existing?.fromNumber ?? defaultFromNumber() ?? ""),
