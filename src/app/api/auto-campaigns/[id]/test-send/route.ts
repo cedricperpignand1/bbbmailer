@@ -89,8 +89,9 @@ export async function POST(
   const project = pickRandom(addresses);
   const firstName = firstNameOverride || "there";
 
-  const subject = renderTemplate(tmplSubject, { firstName, project });
-  const emailBody = renderTemplate(tmplBody, { firstName, project });
+  const vars = { firstName, project, address: project };
+  const subject = renderTemplate(tmplSubject, vars);
+  const emailBody = renderTemplate(tmplBody, vars);
 
   const result = await sendViaGmail({ to, subject, body: emailBody, contentType });
 

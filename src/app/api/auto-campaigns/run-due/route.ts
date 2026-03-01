@@ -231,8 +231,9 @@ export async function POST(req: Request) {
       const project = pickRandom(addresses);
       const firstName = contact.firstName || "there";
 
-      const subject = renderTemplate(tmplSubject, { firstName, project });
-      const body = renderTemplate(tmplBody, { firstName, project });
+      const vars = { firstName, project, address: project };
+      const subject = renderTemplate(tmplSubject, vars);
+      const body = renderTemplate(tmplBody, vars);
 
       try {
         const gmailResult = await sendViaGmail({
