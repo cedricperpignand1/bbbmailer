@@ -10,20 +10,19 @@ function pickTemplate(template: any) {
 }
 
 export async function GET() {
-  const categories = await prisma.category.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { _count: { select: { contacts: true } } },
-  });
+  const [categories, templates] = await Promise.all([
+    prisma.category.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { _count: { select: { contacts: true } } },
+    }),
+    prisma.template.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true, subject: true },
+    }),
+  ]);
 
-  // Fixed template (kept for backward compat display)
-  const template =
-    (await prisma.template.findFirst({
-      where: { name: "Project Invite (Auto)" },
-      orderBy: { createdAt: "desc" },
-    })) ??
-    (await prisma.template.findFirst({
-      orderBy: { createdAt: "desc" },
-    }));
+  // kept for backward compat display
+  const template = templates[0] ?? null;
 
   const autoCampaign = await prisma.autoCampaign.findFirst({
     orderBy: { createdAt: "desc" },
@@ -50,6 +49,7 @@ export async function GET() {
 
   return NextResponse.json({
     categories,
+    templates,
     template: pickTemplate(template),
     autoCampaign: autoCampaign
       ? {

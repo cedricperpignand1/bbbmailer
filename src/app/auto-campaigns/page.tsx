@@ -9,11 +9,18 @@ type CategoryRow = {
   _count?: { contacts: number };
 };
 
+type TemplateRow = {
+  id: number;
+  name: string;
+  subject: string;
+};
+
 type AutoCampaignRow = {
   id: number;
   name: string;
   active: boolean;
   categoryId: number;
+  templateId: number | null;
   templateSubject: string;
   templateBody: string;
   addressesText: string;
@@ -81,11 +88,15 @@ function clampInt(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.trunc(n)));
 }
 
+// Sentinel value meaning "use inline subject/body instead of a saved template"
+const INLINE_ID = 0;
+
 export default function AutoCampaignsPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [categories, setCategories] = useState<CategoryRow[]>([]);
+  const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [autoCampaign, setAutoCampaign] = useState<AutoCampaignRow>(null);
   const [dailyRuns, setDailyRuns] = useState<DailyRunRow[]>([]);
 
@@ -111,6 +122,8 @@ export default function AutoCampaignsPage() {
   const [name, setName] = useState("Monthly Project Invites");
   const [active, setActive] = useState(true);
   const [categoryId, setCategoryId] = useState<number | null>(null);
+  // 0 = inline (custom), >0 = templateId from Templates table
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number>(INLINE_ID);
   const [templateSubject, setTemplateSubject] = useState("");
   const [templateBody, setTemplateBody] = useState("");
   const [addressesText, setAddressesText] = useState("");
@@ -137,6 +150,7 @@ export default function AutoCampaignsPage() {
 
       setGmailConnected(Boolean(gmail?.connected));
       setCategories(data.categories || []);
+      setTemplates(data.templates || []);
       setDailyRuns(data.dailyRuns || []);
 
       const ac: AutoCampaignRow = data.autoCampaign || null;
@@ -146,6 +160,7 @@ export default function AutoCampaignsPage() {
         setName(ac.name || "Monthly Project Invites");
         setActive(Boolean(ac.active));
         setCategoryId(ac.categoryId ?? null);
+        setSelectedTemplateId(ac.templateId ?? INLINE_ID);
         setTemplateSubject(ac.templateSubject || "");
         setTemplateBody(ac.templateBody || "");
         setAddressesText(ac.addressesText || "");
@@ -156,6 +171,7 @@ export default function AutoCampaignsPage() {
         setCategoryId(data.categories?.[0]?.id ?? null);
         setName("Monthly Project Invites");
         setActive(true);
+        setSelectedTemplateId(INLINE_ID);
         setTemplateSubject("");
         setTemplateBody("");
         setAddressesText("");
@@ -172,7 +188,6 @@ export default function AutoCampaignsPage() {
 
   useEffect(() => {
     loadAll();
-    // If redirected back from Gmail OAuth with ?gmail=connected
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("gmail") === "connected") {
       setOkMsg("Gmail connected successfully!");
@@ -198,13 +213,16 @@ export default function AutoCampaignsPage() {
       return setError("Paste at least 1 address (one per line)");
     }
 
+    const usingInline = selectedTemplateId === INLINE_ID;
+
     const payload = {
       id: autoCampaign?.id,
       name: name.trim() || "Monthly Project Invites",
       active: Boolean(active),
       categoryId: catId,
-      templateSubject: templateSubject.trim(),
-      templateBody: templateBody,
+      templateId: usingInline ? null : selectedTemplateId,
+      templateSubject: usingInline ? templateSubject.trim() : "",
+      templateBody: usingInline ? templateBody : "",
       addressesText: normalized,
       maxPerDay: clampInt(Number(maxPerDay), 1, 500),
       sendHourET: clampInt(Number(sendHourET), 0, 23),
@@ -234,14 +252,11 @@ export default function AutoCampaignsPage() {
     if (!autoCampaign) return;
     const newActive = !autoCampaign.active;
     try {
-      const res = await fetch(
-        `/api/auto-campaigns/${autoCampaign.id}/toggle`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ active: newActive }),
-        }
-      );
+      const res = await fetch(`/api/auto-campaigns/${autoCampaign.id}/toggle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: newActive }),
+      });
       const data = await res.json();
       if (!res.ok) return setError(data?.error || "Toggle failed");
       setActive(newActive);
@@ -305,14 +320,11 @@ export default function AutoCampaignsPage() {
     setTestResult(null);
 
     try {
-      const res = await fetch(
-        `/api/auto-campaigns/${autoCampaign.id}/test-send`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to: emailTrimmed }),
-        }
-      );
+      const res = await fetch(`/api/auto-campaigns/${autoCampaign.id}/test-send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: emailTrimmed }),
+      });
       const data = await res.json();
       if (!res.ok) {
         setTestResult({ error: data?.error || "Test send failed" });
@@ -333,6 +345,14 @@ export default function AutoCampaignsPage() {
   const selectedCategory = useMemo(
     () => categories.find((c) => c.id === categoryId) || null,
     [categories, categoryId]
+  );
+
+  const selectedTemplate = useMemo(
+    () =>
+      selectedTemplateId !== INLINE_ID
+        ? templates.find((t) => t.id === selectedTemplateId) ?? null
+        : null,
+    [templates, selectedTemplateId]
   );
 
   const addressCount = useMemo(() => {
@@ -451,6 +471,7 @@ export default function AutoCampaignsPage() {
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-12">
         {/* Settings */}
         <section className="lg:col-span-5 space-y-4">
+          {/* Campaign Settings */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="flex items-start justify-between gap-3">
               <h2 className="text-lg font-semibold text-slate-900">
@@ -517,7 +538,6 @@ export default function AutoCampaignsPage() {
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
                     value={maxPerDay}
                     onChange={(e) => setMaxPerDay(Number(e.target.value))}
-                    title="Max emails to send per day (default 45)"
                   />
                 </div>
 
@@ -532,7 +552,6 @@ export default function AutoCampaignsPage() {
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
                     value={sendHourET}
                     onChange={(e) => setSendHourET(Number(e.target.value))}
-                    title="Hour to send (24h, ET). Cron checks 11:00–11:05 ET."
                   />
                 </div>
 
@@ -557,8 +576,8 @@ export default function AutoCampaignsPage() {
                   <Pill tone="amber">{addressCount} addresses</Pill>
                 </div>
                 <div className="mt-2 text-xs text-slate-500">
-                  Sends sequentially through the list — each contact receives 1
-                  email total. Max {maxPerDay}/day.
+                  Each contact receives 1 email total (sequential). Max{" "}
+                  {maxPerDay}/day.
                 </div>
               </div>
 
@@ -572,44 +591,81 @@ export default function AutoCampaignsPage() {
             </div>
           </div>
 
-          {/* Template */}
+          {/* Template Picker */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Email Template
-            </h2>
+            <h2 className="text-lg font-semibold text-slate-900">Template</h2>
             <p className="mt-1 text-xs text-slate-500">
-              Plain text. Use{" "}
-              <code className="rounded bg-slate-100 px-1">
-                {"{{firstName}}"}
-              </code>{" "}
+              Choose a template you created on the{" "}
+              <a href="/templates" className="text-sky-600 underline">
+                Templates page
+              </a>
+              , or write a custom one below. Use{" "}
+              <code className="rounded bg-slate-100 px-1">{"{{firstName}}"}</code>{" "}
               and{" "}
               <code className="rounded bg-slate-100 px-1">{"{{project}}"}</code>
               .
             </p>
 
-            <div className="mt-3 space-y-3">
-              <div>
-                <div className="text-xs font-semibold text-slate-700">
-                  Subject
-                </div>
-                <input
-                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
-                  value={templateSubject}
-                  onChange={(e) => setTemplateSubject(e.target.value)}
-                  placeholder="Subcontractors needed for {{project}}"
-                />
+            <div className="mt-3">
+              <div className="text-xs font-semibold text-slate-700">
+                Select template
               </div>
-
-              <div>
-                <div className="text-xs font-semibold text-slate-700">Body</div>
-                <textarea
-                  className="mt-1 h-40 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
-                  value={templateBody}
-                  onChange={(e) => setTemplateBody(e.target.value)}
-                  placeholder={`Hi {{firstName}},\n\nWe have a project at {{project}} and are looking for subcontractors. Reply if interested.\n\nThanks`}
-                />
-              </div>
+              <select
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(Number(e.target.value))}
+              >
+                <option value={INLINE_ID}>— Custom (write below) —</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} — {t.subject}
+                  </option>
+                ))}
+              </select>
             </div>
+
+            {/* Selected template preview */}
+            {selectedTemplate && (
+              <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                <div className="font-semibold">{selectedTemplate.name}</div>
+                <div className="mt-0.5 text-xs text-sky-600">
+                  Subject: {selectedTemplate.subject}
+                </div>
+                <div className="mt-1 text-xs text-sky-600">
+                  HTML body will be sent as-is with{" "}
+                  <code className="rounded bg-sky-100 px-1">{"{{firstName}}"}</code> and{" "}
+                  <code className="rounded bg-sky-100 px-1">{"{{project}}"}</code> replaced.
+                </div>
+              </div>
+            )}
+
+            {/* Custom (inline) fields */}
+            {selectedTemplateId === INLINE_ID && (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <div className="text-xs font-semibold text-slate-700">
+                    Subject
+                  </div>
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
+                    value={templateSubject}
+                    onChange={(e) => setTemplateSubject(e.target.value)}
+                    placeholder="Subcontractors needed for {{project}}"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-slate-700">
+                    Body (plain text)
+                  </div>
+                  <textarea
+                    className="mt-1 h-36 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
+                    value={templateBody}
+                    onChange={(e) => setTemplateBody(e.target.value)}
+                    placeholder={`Hi {{firstName}},\n\nWe have a project at {{project}} and need subs. Reply if interested.\n\nThanks`}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Property Addresses */}
@@ -637,7 +693,7 @@ export default function AutoCampaignsPage() {
               Test Email
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Send a single test using current campaign settings. Does not
+              Send a single test using the current campaign settings. Does not
               affect the contact list or daily limit.
             </p>
 
@@ -653,11 +709,7 @@ export default function AutoCampaignsPage() {
                 className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
                 onClick={sendTest}
                 disabled={testSending || !autoCampaign}
-                title={
-                  !autoCampaign
-                    ? "Save the campaign first"
-                    : "Send a test email"
-                }
+                title={!autoCampaign ? "Save the campaign first" : "Send a test email"}
               >
                 {testSending ? "Sending…" : "Send Test"}
               </button>
@@ -754,16 +806,15 @@ export default function AutoCampaignsPage() {
             <div className="font-semibold text-slate-900">How it works</div>
             <div className="mt-1 space-y-1 text-xs">
               <div>
-                • Cron fires every 5 min Mon–Fri; run-due checks for the
+                • Cron fires every 5 min Mon–Fri; only sends within the
                 11:00–11:05 AM ET window.
               </div>
               <div>
-                • Contacts are processed sequentially — each contact is emailed
-                exactly once.
+                • Each contact receives exactly 1 email total (sequential,
+                never repeated).
               </div>
               <div>
-                • Use{" "}
-                <span className="font-semibold">Run Now</span> to force-run
+                • <span className="font-semibold">Run Now</span> forces a run
                 immediately (bypasses time/day check).
               </div>
             </div>

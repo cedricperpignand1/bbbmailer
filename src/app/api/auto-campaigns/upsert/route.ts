@@ -11,14 +11,14 @@ type Body = {
   categoryId: number;
   addressesText: string;
 
-  // Inline template (new Gmail-based system)
+  // Template: either pick an existing one by id, or supply inline subject+body
+  templateId?: number | null;
   templateSubject?: string;
   templateBody?: string;
 
-  maxPerDay?: number; // default 45
-  dayOfMonth?: number; // 1..28 (legacy monthly mode)
-  sendHourET?: number; // 0..23
-  sendMinuteET?: number; // 0..59
+  maxPerDay?: number;
+  sendHourET?: number;
+  sendMinuteET?: number;
 };
 
 function clampInt(n: number, min: number, max: number) {
@@ -47,8 +47,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "categoryId required" }, { status: 400 });
   }
 
-  const addressesTextRaw = String(body?.addressesText || "");
-  const addressesText = normalizeAddresses(addressesTextRaw);
+  const addressesText = normalizeAddresses(String(body?.addressesText || ""));
   if (!addressesText) {
     return NextResponse.json(
       { error: "addressesText required (paste one address per line)" },
@@ -56,15 +55,27 @@ export async function POST(req: Request) {
     );
   }
 
-  const templateSubject = String(body?.templateSubject ?? "").slice(0, 500);
-  const templateBody = String(body?.templateBody ?? "");
+  // templateId takes priority; null means "use inline"
+  const templateId =
+    body?.templateId != null ? Number(body.templateId) : null;
+
+  // Validate templateId if provided
+  if (templateId) {
+    const tmpl = await prisma.template.findUnique({ where: { id: templateId } });
+    if (!tmpl) {
+      return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    }
+  }
+
+  const templateSubject = templateId
+    ? ""
+    : String(body?.templateSubject ?? "").slice(0, 500);
+  const templateBody = templateId ? "" : String(body?.templateBody ?? "");
 
   const maxPerDay = clampInt(Number(body?.maxPerDay ?? 45), 1, 500);
-  const dayOfMonth = clampInt(Number(body?.dayOfMonth ?? 1), 1, 28);
   const sendHourET = clampInt(Number(body?.sendHourET ?? 11), 0, 23);
   const sendMinuteET = clampInt(Number(body?.sendMinuteET ?? 0), 0, 59);
 
-  // Validate category exists
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
   if (!category) {
     return NextResponse.json({ error: "Category not found" }, { status: 404 });
@@ -74,26 +85,14 @@ export async function POST(req: Request) {
     name,
     active,
     categoryId,
+    templateId,
     templateSubject,
     templateBody,
     addressesText,
     maxPerDay,
-    dayOfMonth,
     sendHourET,
     sendMinuteET,
-    // Clear templateId — new campaigns use inline templates
-    templateId: null as number | null,
   };
-
-  // If updating an existing campaign that had a templateId, keep it
-  // (only clear if this is a new campaign)
-  if (id) {
-    const existing = await prisma.autoCampaign.findUnique({ where: { id } });
-    if (existing?.templateId && !templateSubject && !templateBody) {
-      // Backward compat: keep existing templateId if no inline template provided
-      delete (data as any).templateId;
-    }
-  }
 
   const saved = id
     ? await prisma.autoCampaign.update({ where: { id }, data })

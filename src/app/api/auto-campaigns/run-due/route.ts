@@ -152,6 +152,37 @@ export async function POST(req: Request) {
       continue;
     }
 
+    // Resolve template: DB template takes priority over inline fields
+    let tmplSubject = campaign.templateSubject;
+    let tmplBody = campaign.templateBody;
+    let contentType: "text/plain" | "text/html" = "text/plain";
+
+    if (campaign.templateId) {
+      const dbTemplate = await prisma.template.findUnique({
+        where: { id: campaign.templateId },
+      });
+      if (!dbTemplate) {
+        results.push({
+          campaignId: campaign.id,
+          skipped: true,
+          reason: `Template #${campaign.templateId} not found`,
+        });
+        continue;
+      }
+      tmplSubject = dbTemplate.subject;
+      tmplBody = dbTemplate.html;
+      contentType = "text/html";
+    }
+
+    if (!tmplSubject && !tmplBody) {
+      results.push({
+        campaignId: campaign.id,
+        skipped: true,
+        reason: "No template configured (set a template or inline subject/body)",
+      });
+      continue;
+    }
+
     const addresses = parseAddresses(campaign.addressesText);
     if (addresses.length === 0) {
       results.push({
@@ -200,20 +231,15 @@ export async function POST(req: Request) {
       const project = pickRandom(addresses);
       const firstName = contact.firstName || "there";
 
-      const subject = renderTemplate(campaign.templateSubject, {
-        firstName,
-        project,
-      });
-      const bodyText = renderTemplate(campaign.templateBody, {
-        firstName,
-        project,
-      });
+      const subject = renderTemplate(tmplSubject, { firstName, project });
+      const body = renderTemplate(tmplBody, { firstName, project });
 
       try {
         const gmailResult = await sendViaGmail({
           to: contact.email,
           subject,
-          bodyText,
+          body,
+          contentType,
         });
 
         await prisma.autoCampaignSend.create({

@@ -50,7 +50,9 @@ export async function getGmailStatus(): Promise<{
 export async function sendViaGmail(opts: {
   to: string;
   subject: string;
-  bodyText: string;
+  body: string;
+  /** Defaults to "text/html" when body looks like HTML, otherwise "text/plain" */
+  contentType?: "text/plain" | "text/html";
 }): Promise<{
   messageId: string | null | undefined;
   threadId: string | null | undefined;
@@ -70,14 +72,16 @@ export async function sendViaGmail(opts: {
 
   const gmail = google.gmail({ version: "v1", auth: client });
 
+  const ct = opts.contentType ?? "text/html";
+
   const messageParts = [
     `From: ${SENDER_EMAIL}`,
     `To: ${opts.to}`,
     `Subject: ${opts.subject}`,
     `MIME-Version: 1.0`,
-    `Content-Type: text/plain; charset=UTF-8`,
+    `Content-Type: ${ct}; charset=UTF-8`,
     ``,
-    opts.bodyText,
+    opts.body,
   ];
 
   const raw = Buffer.from(messageParts.join("\r\n"))

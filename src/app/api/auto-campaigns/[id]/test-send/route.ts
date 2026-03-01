@@ -18,10 +18,7 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function renderTemplate(
-  template: string,
-  vars: Record<string, string>
-): string {
+function renderTemplate(template: string, vars: Record<string, string>): string {
   let out = template;
   for (const [k, v] of Object.entries(vars)) {
     const re = new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, "g");
@@ -43,15 +40,10 @@ export async function POST(
 
   const body = await req.json().catch(() => null);
   const to = String(body?.to || "").trim();
-  const firstNameOverride = body?.firstName
-    ? String(body.firstName).trim()
-    : null;
+  const firstNameOverride = body?.firstName ? String(body.firstName).trim() : null;
 
   if (!EMAIL_RE.test(to)) {
-    return NextResponse.json(
-      { error: "Invalid email address" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
   }
 
   const campaign = await prisma.autoCampaign.findUnique({ where: { id } });
@@ -59,12 +51,29 @@ export async function POST(
     return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
   }
 
-  if (!campaign.templateSubject && !campaign.templateBody) {
+  // Resolve template: DB template takes priority over inline fields
+  let tmplSubject = campaign.templateSubject;
+  let tmplBody = campaign.templateBody;
+  let contentType: "text/plain" | "text/html" = "text/plain";
+
+  if (campaign.templateId) {
+    const dbTemplate = await prisma.template.findUnique({
+      where: { id: campaign.templateId },
+    });
+    if (!dbTemplate) {
+      return NextResponse.json(
+        { error: `Template #${campaign.templateId} not found. Re-select a template and save.` },
+        { status: 400 }
+      );
+    }
+    tmplSubject = dbTemplate.subject;
+    tmplBody = dbTemplate.html;
+    contentType = "text/html";
+  }
+
+  if (!tmplSubject && !tmplBody) {
     return NextResponse.json(
-      {
-        error:
-          "Campaign has no template. Add a Subject and Body in the campaign settings and save.",
-      },
+      { error: "Campaign has no template. Select a template (or add inline Subject/Body) and save." },
       { status: 400 }
     );
   }
@@ -80,16 +89,10 @@ export async function POST(
   const project = pickRandom(addresses);
   const firstName = firstNameOverride || "there";
 
-  const subject = renderTemplate(campaign.templateSubject, {
-    firstName,
-    project,
-  });
-  const bodyText = renderTemplate(campaign.templateBody, {
-    firstName,
-    project,
-  });
+  const subject = renderTemplate(tmplSubject, { firstName, project });
+  const emailBody = renderTemplate(tmplBody, { firstName, project });
 
-  const result = await sendViaGmail({ to, subject, bodyText });
+  const result = await sendViaGmail({ to, subject, body: emailBody, contentType });
 
   return NextResponse.json({
     ok: true,
