@@ -10,13 +10,12 @@ function pickTemplate(template: any) {
 }
 
 export async function GET() {
-  // load categories (your "lists")
   const categories = await prisma.category.findMany({
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { contacts: true } } },
   });
 
-  // fixed template (Project Invite (Auto))
+  // Fixed template (kept for backward compat display)
   const template =
     (await prisma.template.findFirst({
       where: { name: "Project Invite (Auto)" },
@@ -26,15 +25,24 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     }));
 
-  // MVP: use the most recent AutoCampaign as "the" auto campaign
   const autoCampaign = await prisma.autoCampaign.findFirst({
     orderBy: { createdAt: "desc" },
     include: { category: true, template: true },
   });
 
+  // Legacy runs (weekday bucket system)
   const runs = autoCampaign
     ? await prisma.autoCampaignRun.findMany({
         where: { autoCampaignId: autoCampaign.id },
+        orderBy: { ranAt: "desc" },
+        take: 30,
+      })
+    : [];
+
+  // New Gmail daily runs
+  const dailyRuns = autoCampaign
+    ? await prisma.autoCampaignDailyRun.findMany({
+        where: { campaignId: autoCampaign.id },
         orderBy: { ranAt: "desc" },
         take: 30,
       })
@@ -50,7 +58,10 @@ export async function GET() {
           active: autoCampaign.active,
           categoryId: autoCampaign.categoryId,
           templateId: autoCampaign.templateId,
+          templateSubject: autoCampaign.templateSubject,
+          templateBody: autoCampaign.templateBody,
           addressesText: autoCampaign.addressesText,
+          maxPerDay: autoCampaign.maxPerDay,
           dayOfMonth: autoCampaign.dayOfMonth,
           sendHourET: autoCampaign.sendHourET,
           sendMinuteET: autoCampaign.sendMinuteET,
@@ -59,5 +70,6 @@ export async function GET() {
         }
       : null,
     runs,
+    dailyRuns,
   });
 }

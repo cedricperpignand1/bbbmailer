@@ -241,6 +241,13 @@ export async function POST(req: Request) {
     );
   }
 
+  if (!auto.templateId) {
+    return NextResponse.json(
+      { error: "AutoCampaign has no template. Use the new Gmail-based run-due endpoint, or set a template." },
+      { status: 400 }
+    );
+  }
+
   const template = await prisma.template.findUnique({ where: { id: auto.templateId } });
   if (!template) {
     return NextResponse.json(
@@ -297,7 +304,7 @@ export async function POST(req: Request) {
     data: {
       categoryId: auto.categoryId,
       phaseNumber: 999,
-      templateId: auto.templateId,
+      templateId: auto.templateId!,
       status: "queued",
     },
   });

@@ -9,37 +9,28 @@ type CategoryRow = {
   _count?: { contacts: number };
 };
 
-type TemplateRow =
-  | {
-      id: number;
-      name: string;
-      subject: string;
-    }
-  | null;
-
-type AutoCampaignRow =
-  | {
-      id: number;
-      name: string;
-      active: boolean;
-      categoryId: number;
-      templateId: number;
-      addressesText: string;
-      dayOfMonth: number; // 0 = every weekday
-      sendHourET: number;
-      sendMinuteET: number;
-      createdAt: string;
-      updatedAt: string;
-    }
-  | null;
-
-type AutoRunRow = {
+type AutoCampaignRow = {
   id: number;
-  monthKey: string;
-  weekdayKey: string;
+  name: string;
+  active: boolean;
+  categoryId: number;
+  templateSubject: string;
+  templateBody: string;
+  addressesText: string;
+  maxPerDay: number;
+  sendHourET: number;
+  sendMinuteET: number;
+  createdAt: string;
+  updatedAt: string;
+} | null;
+
+type DailyRunRow = {
+  id: number;
+  campaignId: number;
+  dateET: string;
   ranAt: string;
-  queuedCount: number;
-  campaignId?: number | null;
+  sentCount: number;
+  failedCount: number;
 };
 
 function Pill({
@@ -77,17 +68,17 @@ function formatDateTime(x: string) {
   });
 }
 
+function normalizeAddresses(text: string) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
 function clampInt(n: number, min: number, max: number) {
   if (!Number.isFinite(n)) return min;
   return Math.max(min, Math.min(max, Math.trunc(n)));
-}
-
-function normalizeAddresses(text: string) {
-  const lines = String(text || "")
-    .split(/\r?\n/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  return lines.join("\n");
 }
 
 export default function AutoCampaignsPage() {
@@ -95,24 +86,36 @@ export default function AutoCampaignsPage() {
   const [saving, setSaving] = useState(false);
 
   const [categories, setCategories] = useState<CategoryRow[]>([]);
-  const [template, setTemplate] = useState<TemplateRow>(null);
   const [autoCampaign, setAutoCampaign] = useState<AutoCampaignRow>(null);
-  const [runs, setRuns] = useState<AutoRunRow[]>([]);
+  const [dailyRuns, setDailyRuns] = useState<DailyRunRow[]>([]);
 
-  // Run UI
+  // Gmail connection status
+  const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
+
+  // Run Today
   const [running, setRunning] = useState(false);
   const [lastRunResult, setLastRunResult] = useState<any>(null);
-
-  // AbortController for cancel
   const runAbortRef = useRef<AbortController | null>(null);
 
-  // form state
+  // Test Email
+  const [testEmail, setTestEmail] = useState("");
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    ok?: boolean;
+    error?: string;
+    projectUsed?: string;
+    messageId?: string;
+  } | null>(null);
+
+  // Form state
   const [name, setName] = useState("Monthly Project Invites");
   const [active, setActive] = useState(true);
   const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [templateSubject, setTemplateSubject] = useState("");
+  const [templateBody, setTemplateBody] = useState("");
   const [addressesText, setAddressesText] = useState("");
-  const [dayOfMonth, setDayOfMonth] = useState(0); // default to daily mode
-  const [sendHourET, setSendHourET] = useState(9);
+  const [maxPerDay, setMaxPerDay] = useState(45);
+  const [sendHourET, setSendHourET] = useState(11);
   const [sendMinuteET, setSendMinuteET] = useState(0);
 
   const [error, setError] = useState<string | null>(null);
@@ -124,33 +127,40 @@ export default function AutoCampaignsPage() {
     setOkMsg(null);
 
     try {
-      const res = await fetch("/api/auto-campaigns", { cache: "no-store" });
-      const data = await res.json();
+      const [dataRes, gmailRes] = await Promise.all([
+        fetch("/api/auto-campaigns", { cache: "no-store" }),
+        fetch("/api/gmail/status", { cache: "no-store" }),
+      ]);
 
+      const data = await dataRes.json();
+      const gmail = await gmailRes.json().catch(() => ({ connected: false }));
+
+      setGmailConnected(Boolean(gmail?.connected));
       setCategories(data.categories || []);
-      setTemplate(data.template || null);
-      setAutoCampaign(data.autoCampaign || null);
-      setRuns(data.runs || []);
+      setDailyRuns(data.dailyRuns || []);
 
-      // hydrate form from saved autoCampaign if it exists
       const ac: AutoCampaignRow = data.autoCampaign || null;
+      setAutoCampaign(ac);
+
       if (ac) {
         setName(ac.name || "Monthly Project Invites");
         setActive(Boolean(ac.active));
         setCategoryId(ac.categoryId ?? null);
+        setTemplateSubject(ac.templateSubject || "");
+        setTemplateBody(ac.templateBody || "");
         setAddressesText(ac.addressesText || "");
-        setDayOfMonth(typeof ac.dayOfMonth === "number" ? ac.dayOfMonth : 0);
-        setSendHourET(ac.sendHourET ?? 9);
+        setMaxPerDay(ac.maxPerDay ?? 45);
+        setSendHourET(ac.sendHourET ?? 11);
         setSendMinuteET(ac.sendMinuteET ?? 0);
       } else {
-        // defaults
-        const firstCat = data.categories?.[0]?.id ?? null;
-        setCategoryId(firstCat);
+        setCategoryId(data.categories?.[0]?.id ?? null);
         setName("Monthly Project Invites");
         setActive(true);
+        setTemplateSubject("");
+        setTemplateBody("");
         setAddressesText("");
-        setDayOfMonth(0); // daily by default
-        setSendHourET(9);
+        setMaxPerDay(45);
+        setSendHourET(11);
         setSendMinuteET(0);
       }
     } catch {
@@ -162,6 +172,13 @@ export default function AutoCampaignsPage() {
 
   useEffect(() => {
     loadAll();
+    // If redirected back from Gmail OAuth with ?gmail=connected
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("gmail") === "connected") {
+      setOkMsg("Gmail connected successfully!");
+      window.history.replaceState({}, "", "/auto-campaigns");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function save() {
@@ -186,11 +203,10 @@ export default function AutoCampaignsPage() {
       name: name.trim() || "Monthly Project Invites",
       active: Boolean(active),
       categoryId: catId,
+      templateSubject: templateSubject.trim(),
+      templateBody: templateBody,
       addressesText: normalized,
-
-      // 0 = every weekday, 1–28 = monthly
-      dayOfMonth: clampInt(Number(dayOfMonth), 0, 28),
-
+      maxPerDay: clampInt(Number(maxPerDay), 1, 500),
       sendHourET: clampInt(Number(sendHourET), 0, 23),
       sendMinuteET: clampInt(Number(sendMinuteET), 0, 59),
     };
@@ -214,8 +230,29 @@ export default function AutoCampaignsPage() {
     }
   }
 
+  async function toggleActive() {
+    if (!autoCampaign) return;
+    const newActive = !autoCampaign.active;
+    try {
+      const res = await fetch(
+        `/api/auto-campaigns/${autoCampaign.id}/toggle`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active: newActive }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) return setError(data?.error || "Toggle failed");
+      setActive(newActive);
+      setAutoCampaign((prev) => (prev ? { ...prev, active: newActive } : prev));
+      setOkMsg(newActive ? "Campaign resumed." : "Campaign paused.");
+    } catch {
+      setError("Toggle failed");
+    }
+  }
+
   async function runToday() {
-    // cancel any previous run request
     runAbortRef.current?.abort();
     const controller = new AbortController();
     runAbortRef.current = controller;
@@ -226,7 +263,7 @@ export default function AutoCampaignsPage() {
     setLastRunResult(null);
 
     try {
-      const res = await fetch("/api/auto-campaigns/run-today?force=1", {
+      const res = await fetch("/api/auto-campaigns/run-due?force=1", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
@@ -236,15 +273,14 @@ export default function AutoCampaignsPage() {
       if (!res.ok) return setError(data?.error || "Run failed");
 
       setLastRunResult(data);
-
       if (data?.skipped) {
-        setOkMsg(`Skipped: ${data.reason || "no reason"}`);
+        setOkMsg(`Skipped: ${data.reason || ""}`);
       } else {
-        setOkMsg(
-          data?.campaignId
-            ? `Queued ${data.queued} emails (Campaign #${data.campaignId}).`
-            : `Run completed (queued ${data.queued || 0}).`
+        const total = (data.results || []).reduce(
+          (s: number, r: any) => s + (r.sent || 0),
+          0
         );
+        setOkMsg(`Run completed. Sent ${total} email(s).`);
       }
 
       await loadAll();
@@ -260,8 +296,38 @@ export default function AutoCampaignsPage() {
     }
   }
 
-  function cancelRun() {
-    runAbortRef.current?.abort();
+  async function sendTest() {
+    if (!autoCampaign) return setError("Save the campaign first.");
+    const emailTrimmed = testEmail.trim();
+    if (!emailTrimmed) return setTestResult({ error: "Enter an email address." });
+
+    setTestSending(true);
+    setTestResult(null);
+
+    try {
+      const res = await fetch(
+        `/api/auto-campaigns/${autoCampaign.id}/test-send`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: emailTrimmed }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setTestResult({ error: data?.error || "Test send failed" });
+      } else {
+        setTestResult({
+          ok: true,
+          projectUsed: data.projectUsed,
+          messageId: data.messageId,
+        });
+      }
+    } catch {
+      setTestResult({ error: "Test send failed — network error" });
+    } finally {
+      setTestSending(false);
+    }
   }
 
   const selectedCategory = useMemo(
@@ -285,7 +351,7 @@ export default function AutoCampaignsPage() {
             Auto Campaigns
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Daily/Monthly scheduled project invites (contacts split Mon–Fri and reused weekly).
+            Sends up to 45 emails/day at 11:00 AM ET, Mon–Fri via Gmail.
           </p>
         </div>
 
@@ -298,25 +364,61 @@ export default function AutoCampaignsPage() {
             Refresh
           </button>
 
-          <button
-            className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 hover:bg-red-100 disabled:opacity-60"
-            onClick={cancelRun}
-            disabled={!running}
-            title="Cancel the current run request"
-          >
-            Cancel
-          </button>
+          {autoCampaign && (
+            <button
+              className={`rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60 ${
+                autoCampaign.active
+                  ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+              }`}
+              onClick={toggleActive}
+              disabled={loading || saving || running}
+            >
+              {autoCampaign.active ? "Pause" : "Resume"}
+            </button>
+          )}
 
           <button
             className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
             onClick={runToday}
             disabled={loading || saving || running}
-            title="Queues today's weekday bucket into a new Campaign"
+            title="Force-run now (bypasses time/day check)"
           >
-            {running ? "Running..." : "Run Today"}
+            {running ? "Running..." : "Run Now"}
           </button>
         </div>
       </div>
+
+      {/* Gmail Status Banner */}
+      {gmailConnected === false && (
+        <div className="mt-4 flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="text-sm text-amber-800">
+            <span className="font-semibold">Gmail not connected.</span> Connect
+            your Gmail account to enable sending.
+          </div>
+          <a
+            href="/api/gmail/connect"
+            className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+          >
+            Connect Gmail
+          </a>
+        </div>
+      )}
+
+      {gmailConnected === true && (
+        <div className="mt-4 flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 p-3 px-4">
+          <div className="text-sm text-emerald-800">
+            <span className="font-semibold">Gmail connected</span> —
+            buildersbidbook@gmail.com
+          </div>
+          <a
+            href="/api/gmail/connect"
+            className="text-xs text-emerald-700 underline hover:text-emerald-900"
+          >
+            Re-connect
+          </a>
+        </div>
+      )}
 
       {error && (
         <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
@@ -335,32 +437,28 @@ export default function AutoCampaignsPage() {
       {lastRunResult && (
         <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold text-slate-900">Last run result</div>
+            <div className="text-sm font-semibold text-slate-900">
+              Last run result
+            </div>
             <Pill tone="blue">run</Pill>
           </div>
-          <pre className="mt-3 max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+          <pre className="mt-3 max-h-48 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
             {JSON.stringify(lastRunResult, null, 2)}
           </pre>
         </div>
       )}
 
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-12">
-        {/* Builder */}
-        <section className="lg:col-span-5">
+        {/* Settings */}
+        <section className="lg:col-span-5 space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Auto Campaign Settings
-                </h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  One template:{" "}
-                  <span className="font-semibold text-slate-900">
-                    {template?.name || "Missing template"}
-                  </span>
-                </p>
-              </div>
-              <Pill tone={active ? "green" : "neutral"}>{active ? "active" : "paused"}</Pill>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Campaign Settings
+              </h2>
+              <Pill tone={active ? "green" : "neutral"}>
+                {active ? "active" : "paused"}
+              </Pill>
             </div>
 
             <div className="mt-4 space-y-3">
@@ -382,7 +480,7 @@ export default function AutoCampaignsPage() {
                   onChange={(e) => setActive(e.target.checked)}
                 />
                 <label htmlFor="active" className="text-sm text-slate-700">
-                  Active (allow scheduling)
+                  Active (allow scheduled sending)
                 </label>
               </div>
 
@@ -400,7 +498,7 @@ export default function AutoCampaignsPage() {
                   ) : (
                     categories.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name} ({c._count?.contacts ?? 0})
+                        {c.name} ({c._count?.contacts ?? 0} contacts)
                       </option>
                     ))
                   )}
@@ -409,23 +507,24 @@ export default function AutoCampaignsPage() {
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <div className="text-xs font-semibold text-slate-700">Day of month</div>
+                  <div className="text-xs font-semibold text-slate-700">
+                    Max/day
+                  </div>
                   <input
                     type="number"
-                    min={0}
-                    max={28}
+                    min={1}
+                    max={500}
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
-                    value={dayOfMonth}
-                    onChange={(e) => setDayOfMonth(Number(e.target.value))}
-                    title="0 = every weekday. 1–28 = only on that day each month."
+                    value={maxPerDay}
+                    onChange={(e) => setMaxPerDay(Number(e.target.value))}
+                    title="Max emails to send per day (default 45)"
                   />
-                  <div className="mt-1 text-xs text-slate-500">
-                    Use <code>0</code> to run <b>every weekday</b>. Use <code>1–28</code> to run monthly.
-                  </div>
                 </div>
 
                 <div>
-                  <div className="text-xs font-semibold text-slate-700">Hour (ET)</div>
+                  <div className="text-xs font-semibold text-slate-700">
+                    Hour ET
+                  </div>
                   <input
                     type="number"
                     min={0}
@@ -433,11 +532,14 @@ export default function AutoCampaignsPage() {
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
                     value={sendHourET}
                     onChange={(e) => setSendHourET(Number(e.target.value))}
+                    title="Hour to send (24h, ET). Cron checks 11:00–11:05 ET."
                   />
                 </div>
 
                 <div>
-                  <div className="text-xs font-semibold text-slate-700">Minute</div>
+                  <div className="text-xs font-semibold text-slate-700">
+                    Minute
+                  </div>
                   <input
                     type="number"
                     min={0}
@@ -449,33 +551,14 @@ export default function AutoCampaignsPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                <div className="font-semibold text-slate-900">Weekday batching</div>
-                <div className="mt-1">
-                  Contacts are deterministically split by <code>contactId % 5</code> into
-                  Mon–Fri, and reused every week.
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <div className="flex flex-wrap gap-2">
                   <Pill tone="blue">{totalContacts} contacts in list</Pill>
                   <Pill tone="amber">{addressCount} addresses</Pill>
                 </div>
-              </div>
-
-              <div>
-                <div className="text-xs font-semibold text-slate-700">
-                  Property addresses (one per line)
-                </div>
-
-                <textarea
-                  className="mt-1 h-40 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
-                  value={addressesText}
-                  onChange={(e) => setAddressesText(e.target.value)}
-                  placeholder={`123 Main St Miami, FL 33101\n456 Ocean Dr Miami Beach, FL 33139\n...`}
-                />
-
-                <div className="mt-1 text-xs text-slate-500">
-                  We’ll rotate addresses as we queue emails. Your email template uses{" "}
-                  <code>{"{{address}}"}</code>.
+                <div className="mt-2 text-xs text-slate-500">
+                  Sends sequentially through the list — each contact receives 1
+                  email total. Max {maxPerDay}/day.
                 </div>
               </div>
 
@@ -484,54 +567,180 @@ export default function AutoCampaignsPage() {
                 onClick={save}
                 disabled={saving || loading || running}
               >
-                {saving ? "Saving..." : "Save Auto Campaign"}
+                {saving ? "Saving..." : "Save Campaign"}
               </button>
             </div>
           </div>
+
+          {/* Template */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Email Template
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Plain text. Use{" "}
+              <code className="rounded bg-slate-100 px-1">
+                {"{{firstName}}"}
+              </code>{" "}
+              and{" "}
+              <code className="rounded bg-slate-100 px-1">{"{{project}}"}</code>
+              .
+            </p>
+
+            <div className="mt-3 space-y-3">
+              <div>
+                <div className="text-xs font-semibold text-slate-700">
+                  Subject
+                </div>
+                <input
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
+                  value={templateSubject}
+                  onChange={(e) => setTemplateSubject(e.target.value)}
+                  placeholder="Subcontractors needed for {{project}}"
+                />
+              </div>
+
+              <div>
+                <div className="text-xs font-semibold text-slate-700">Body</div>
+                <textarea
+                  className="mt-1 h-40 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
+                  value={templateBody}
+                  onChange={(e) => setTemplateBody(e.target.value)}
+                  placeholder={`Hi {{firstName}},\n\nWe have a project at {{project}} and are looking for subcontractors. Reply if interested.\n\nThanks`}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Property Addresses */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Property Addresses
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              One per line. A random address is used as{" "}
+              <code className="rounded bg-slate-100 px-1">{"{{project}}"}</code>{" "}
+              per email.
+            </p>
+
+            <textarea
+              className="mt-3 h-40 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
+              value={addressesText}
+              onChange={(e) => setAddressesText(e.target.value)}
+              placeholder={`123 Main St Miami, FL 33101\n456 Ocean Dr Miami Beach, FL 33139\n...`}
+            />
+          </div>
+
+          {/* Test Email */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Test Email
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Send a single test using current campaign settings. Does not
+              affect the contact list or daily limit.
+            </p>
+
+            <div className="mt-3 flex gap-2">
+              <input
+                type="email"
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+              <button
+                className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+                onClick={sendTest}
+                disabled={testSending || !autoCampaign}
+                title={
+                  !autoCampaign
+                    ? "Save the campaign first"
+                    : "Send a test email"
+                }
+              >
+                {testSending ? "Sending…" : "Send Test"}
+              </button>
+            </div>
+
+            {testResult && (
+              <div
+                className={`mt-3 rounded-xl border p-3 text-sm ${
+                  testResult.ok
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-red-200 bg-red-50 text-red-800"
+                }`}
+              >
+                {testResult.ok ? (
+                  <>
+                    <div className="font-semibold">Sent!</div>
+                    <div className="mt-1 text-xs">
+                      Project used:{" "}
+                      <span className="font-medium">{testResult.projectUsed}</span>
+                    </div>
+                    {testResult.messageId && (
+                      <div className="mt-0.5 text-xs text-emerald-600">
+                        Message ID: {testResult.messageId}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="font-semibold">Failed</div>
+                    <div className="mt-1">{testResult.error}</div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </section>
 
-        {/* Runs */}
+        {/* Run History */}
         <section className="lg:col-span-7">
           <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
             <div className="border-b border-slate-200 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Recent auto runs</h2>
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    Daily run history
+                  </h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    History of weekday runs (to prevent duplicates).
+                    Gmail sends — one run per campaign per day.
                   </p>
                 </div>
-                <Pill tone="neutral">Runs</Pill>
+                <Pill tone="blue">Gmail</Pill>
               </div>
             </div>
 
-            {runs.length === 0 ? (
+            {dailyRuns.length === 0 ? (
               <div className="p-5 text-sm text-slate-600">No runs yet.</div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px]">
+                <table className="w-full min-w-[540px]">
                   <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-600">
                     <tr>
-                      <th className="px-5 py-3">Month</th>
-                      <th className="px-5 py-3">Weekday</th>
-                      <th className="px-5 py-3">Queued</th>
-                      <th className="px-5 py-3">Ran</th>
-                      <th className="px-5 py-3">Campaign</th>
+                      <th className="px-5 py-3">Date (ET)</th>
+                      <th className="px-5 py-3">Sent</th>
+                      <th className="px-5 py-3">Failed</th>
+                      <th className="px-5 py-3">Ran at</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {runs.map((r) => (
+                    {dailyRuns.map((r) => (
                       <tr key={r.id} className="text-sm">
-                        <td className="px-5 py-4">{r.monthKey}</td>
+                        <td className="px-5 py-4 font-medium">{r.dateET}</td>
                         <td className="px-5 py-4">
-                          <Pill tone="blue">{r.weekdayKey}</Pill>
+                          <Pill tone="green">{r.sentCount}</Pill>
                         </td>
-                        <td className="px-5 py-4">{r.queuedCount}</td>
-                        <td className="px-5 py-4 text-slate-700">
+                        <td className="px-5 py-4">
+                          {r.failedCount > 0 ? (
+                            <Pill tone="red">{r.failedCount}</Pill>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-4 text-slate-500">
                           {formatDateTime(r.ranAt)}
-                        </td>
-                        <td className="px-5 py-4 text-slate-700">
-                          {r.campaignId ? `#${r.campaignId}` : "-"}
                         </td>
                       </tr>
                     ))}
@@ -542,10 +751,21 @@ export default function AutoCampaignsPage() {
           </div>
 
           <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-            <div className="font-semibold text-slate-900">Tip</div>
-            <div className="mt-1">
-              Run Today only queues the weekday bucket. You still control sending from the
-              Campaigns tab (Send 50 / Send 500) unless we wire auto-send next.
+            <div className="font-semibold text-slate-900">How it works</div>
+            <div className="mt-1 space-y-1 text-xs">
+              <div>
+                • Cron fires every 5 min Mon–Fri; run-due checks for the
+                11:00–11:05 AM ET window.
+              </div>
+              <div>
+                • Contacts are processed sequentially — each contact is emailed
+                exactly once.
+              </div>
+              <div>
+                • Use{" "}
+                <span className="font-semibold">Run Now</span> to force-run
+                immediately (bypasses time/day check).
+              </div>
             </div>
           </div>
         </section>

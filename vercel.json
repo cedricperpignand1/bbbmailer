@@ -3,6 +3,10 @@
     {
       "path": "/api/auto-campaigns/cron",
       "schedule": "*/5 * * * 1-5"
+    },
+    {
+      "path": "/api/auto-campaigns/run-due",
+      "schedule": "*/5 * * * 1-5"
     }
   ]
 }
