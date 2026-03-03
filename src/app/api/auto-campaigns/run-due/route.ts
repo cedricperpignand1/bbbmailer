@@ -268,8 +268,8 @@ export async function POST(req: Request) {
         failed++;
       }
 
-      // Pacing: 2–8 s between sends (skip after last)
-      if (i < contacts.length - 1) {
+      // Pacing: 2–8 s between sends (scheduled only — skipped on force/manual runs)
+      if (!force && i < contacts.length - 1) {
         const ms = 2000 + Math.floor(Math.random() * 6000);
         await sleep(ms);
       }

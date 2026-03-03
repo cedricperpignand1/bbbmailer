@@ -103,10 +103,11 @@ export default function AutoCampaignsPage() {
   // Gmail connection status
   const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
 
-  // Run Today
+  // Run Now
   const [running, setRunning] = useState(false);
+  const [runningMsg, setRunningMsg] = useState("");
   const [lastRunResult, setLastRunResult] = useState<any>(null);
-  const runAbortRef = useRef<AbortController | null>(null);
+  const isRunningRef = useRef(false); // ref guard prevents double-fire before React re-renders
 
   // Test Email
   const [testEmail, setTestEmail] = useState("");
@@ -267,12 +268,12 @@ export default function AutoCampaignsPage() {
     }
   }
 
-  async function runToday() {
-    runAbortRef.current?.abort();
-    const controller = new AbortController();
-    runAbortRef.current = controller;
+  async function runNow() {
+    if (isRunningRef.current) return; // block double-clicks before React re-renders
+    isRunningRef.current = true;
 
     setRunning(true);
+    setRunningMsg(`Sending up to ${maxPerDay} emails… please wait`);
     setError(null);
     setOkMsg(null);
     setLastRunResult(null);
@@ -281,33 +282,36 @@ export default function AutoCampaignsPage() {
       const res = await fetch("/api/auto-campaigns/run-due?force=1", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
       });
 
       const data = await res.json();
-      if (!res.ok) return setError(data?.error || "Run failed");
+      if (!res.ok) {
+        setError(data?.error || "Run failed");
+        return;
+      }
 
       setLastRunResult(data);
+
       if (data?.skipped) {
         setOkMsg(`Skipped: ${data.reason || ""}`);
       } else {
-        const total = (data.results || []).reduce(
-          (s: number, r: any) => s + (r.sent || 0),
-          0
+        const results: any[] = data.results || [];
+        const totalSent = results.reduce((s, r) => s + (r.sent || 0), 0);
+        const totalFailed = results.reduce((s, r) => s + (r.failed || 0), 0);
+        setOkMsg(
+          totalFailed > 0
+            ? `Done — sent ${totalSent}, failed ${totalFailed}.`
+            : `Done — sent ${totalSent} email(s).`
         );
-        setOkMsg(`Run completed. Sent ${total} email(s).`);
       }
 
       await loadAll();
-    } catch (e: any) {
-      if (e?.name === "AbortError") {
-        setOkMsg("Canceled.");
-        return;
-      }
-      setError("Run failed");
+    } catch {
+      setError("Run failed — network error");
     } finally {
       setRunning(false);
-      runAbortRef.current = null;
+      setRunningMsg("");
+      isRunningRef.current = false;
     }
   }
 
@@ -400,11 +404,11 @@ export default function AutoCampaignsPage() {
 
           <button
             className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
-            onClick={runToday}
+            onClick={runNow}
             disabled={loading || saving || running}
             title="Force-run now (bypasses time/day check)"
           >
-            {running ? "Running..." : "Run Now"}
+            {running ? "Running…" : "Run Now"}
           </button>
         </div>
       </div>
@@ -451,6 +455,16 @@ export default function AutoCampaignsPage() {
         <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
           <div className="font-semibold">OK</div>
           <div className="mt-1">{okMsg}</div>
+        </div>
+      )}
+
+      {running && runningMsg && (
+        <div className="mt-4 flex items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
+          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+          {runningMsg}
         </div>
       )}
 
