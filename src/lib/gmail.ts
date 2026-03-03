@@ -74,10 +74,13 @@ export async function sendViaGmail(opts: {
 
   const ct = opts.contentType ?? "text/html";
 
+  // RFC 2047: encode subject as UTF-8 Base64 so non-ASCII chars (em dash, etc.) render correctly
+  const encodedSubject = `=?UTF-8?B?${Buffer.from(opts.subject, "utf-8").toString("base64")}?=`;
+
   const messageParts = [
     `From: ${SENDER_EMAIL}`,
     `To: ${opts.to}`,
-    `Subject: ${opts.subject}`,
+    `Subject: ${encodedSubject}`,
     `MIME-Version: 1.0`,
     `Content-Type: ${ct}; charset=UTF-8`,
     ``,
