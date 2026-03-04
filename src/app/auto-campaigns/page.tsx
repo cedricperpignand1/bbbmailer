@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 type CategoryRow = {
   id: number;
@@ -102,12 +102,6 @@ export default function AutoCampaignsPage() {
 
   // Gmail connection status
   const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
-
-  // Run Now
-  const [running, setRunning] = useState(false);
-  const [runningMsg, setRunningMsg] = useState("");
-  const [lastRunResult, setLastRunResult] = useState<any>(null);
-  const isRunningRef = useRef(false); // ref guard prevents double-fire before React re-renders
 
   // Test Email
   const [testEmail, setTestEmail] = useState("");
@@ -268,53 +262,6 @@ export default function AutoCampaignsPage() {
     }
   }
 
-  async function runNow() {
-    if (isRunningRef.current) return; // block double-clicks before React re-renders
-    isRunningRef.current = true;
-
-    setRunning(true);
-    setRunningMsg(`Sending up to ${maxPerDay} emails… please wait`);
-    setError(null);
-    setOkMsg(null);
-    setLastRunResult(null);
-
-    try {
-      const res = await fetch("/api/auto-campaigns/run-due?force=1", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data?.error || "Run failed");
-        return;
-      }
-
-      setLastRunResult(data);
-
-      if (data?.skipped) {
-        setOkMsg(`Skipped: ${data.reason || ""}`);
-      } else {
-        const results: any[] = data.results || [];
-        const totalSent = results.reduce((s, r) => s + (r.sent || 0), 0);
-        const totalFailed = results.reduce((s, r) => s + (r.failed || 0), 0);
-        setOkMsg(
-          totalFailed > 0
-            ? `Done — sent ${totalSent}, failed ${totalFailed}.`
-            : `Done — sent ${totalSent} email(s).`
-        );
-      }
-
-      await loadAll();
-    } catch {
-      setError("Run failed — network error");
-    } finally {
-      setRunning(false);
-      setRunningMsg("");
-      isRunningRef.current = false;
-    }
-  }
-
   async function sendTest() {
     if (!autoCampaign) return setError("Save the campaign first.");
     const emailTrimmed = testEmail.trim();
@@ -383,7 +330,7 @@ export default function AutoCampaignsPage() {
           <button
             className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
             onClick={loadAll}
-            disabled={loading || running}
+            disabled={loading}
           >
             Refresh
           </button>
@@ -396,20 +343,11 @@ export default function AutoCampaignsPage() {
                   : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
               }`}
               onClick={toggleActive}
-              disabled={loading || saving || running}
+              disabled={loading || saving}
             >
               {autoCampaign.active ? "Pause" : "Resume"}
             </button>
           )}
-
-          <button
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
-            onClick={runNow}
-            disabled={loading || saving || running}
-            title="Force-run now (bypasses time/day check)"
-          >
-            {running ? "Running…" : "Run Now"}
-          </button>
         </div>
       </div>
 
@@ -455,30 +393,6 @@ export default function AutoCampaignsPage() {
         <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
           <div className="font-semibold">OK</div>
           <div className="mt-1">{okMsg}</div>
-        </div>
-      )}
-
-      {running && runningMsg && (
-        <div className="mt-4 flex items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
-          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg>
-          {runningMsg}
-        </div>
-      )}
-
-      {lastRunResult && (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold text-slate-900">
-              Last run result
-            </div>
-            <Pill tone="blue">run</Pill>
-          </div>
-          <pre className="mt-3 max-h-48 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
-            {JSON.stringify(lastRunResult, null, 2)}
-          </pre>
         </div>
       )}
 
@@ -598,7 +512,7 @@ export default function AutoCampaignsPage() {
               <button
                 className="w-full rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-60"
                 onClick={save}
-                disabled={saving || loading || running}
+                disabled={saving || loading}
               >
                 {saving ? "Saving..." : "Save Campaign"}
               </button>
@@ -820,16 +734,16 @@ export default function AutoCampaignsPage() {
             <div className="font-semibold text-slate-900">How it works</div>
             <div className="mt-1 space-y-1 text-xs">
               <div>
-                • Cron fires every 5 min Mon–Fri; only sends within the
-                11:00–11:05 AM ET window.
+                • A cron job fires every 5 min Mon–Fri and sends only during
+                the 11:00–11:05 AM ET window — no action needed from you.
               </div>
               <div>
                 • Each contact receives exactly 1 email total (sequential,
                 never repeated).
               </div>
               <div>
-                • <span className="font-semibold">Run Now</span> forces a run
-                immediately (bypasses time/day check).
+                • Use <span className="font-semibold">Send Test</span> below to
+                preview the email without affecting the contact list.
               </div>
             </div>
           </div>
