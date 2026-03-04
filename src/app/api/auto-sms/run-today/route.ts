@@ -38,6 +38,11 @@ function pickRandomAddress(addresses: string[]): string {
   return addresses[Math.floor(Math.random() * addresses.length)];
 }
 
+// Vercel cron sends GET — delegate to the same handler
+export async function GET(req: Request) {
+  return POST(req);
+}
+
 export async function POST(req: Request) {
   const url = new URL(req.url);
   const force = url.searchParams.get("force") === "1";
