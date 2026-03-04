@@ -322,7 +322,7 @@ export default function AutoCampaignsPage() {
             Auto Campaigns
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Sends up to 45 emails/day at 11:00 AM ET, Mon–Fri via Gmail.
+            Sends automatically at your chosen time, Mon–Fri via Gmail.
           </p>
         </div>
 
@@ -735,7 +735,7 @@ export default function AutoCampaignsPage() {
             <div className="mt-1 space-y-1 text-xs">
               <div>
                 • A cron job fires every 5 min Mon–Fri and sends only during
-                the 11:00–11:05 AM ET window — no action needed from you.
+                the time window you set (Hour ET / Minute) — no action needed from you.
               </div>
               <div>
                 • Each contact receives exactly 1 email total (sequential,

@@ -97,28 +97,14 @@ export async function POST(req: Request) {
 
   const et = getETParts();
 
-  if (!force) {
-    // Must be Mon–Fri
-    if (!isWeekday(et.weekday)) {
-      return NextResponse.json({
-        ok: true,
-        skipped: true,
-        reason: "Weekend — no sends Mon–Fri only",
-        weekday: et.weekday,
-      });
-    }
-
-    // Must be within 11:00–11:05 ET
-    const nowMin = et.hour * 60 + et.minute;
-    const targetMin = 11 * 60;
-    if (nowMin < targetMin || nowMin > targetMin + 5) {
-      return NextResponse.json({
-        ok: true,
-        skipped: true,
-        reason: "Outside 11:00–11:05 ET window",
-        etTime: `${String(et.hour).padStart(2, "0")}:${String(et.minute).padStart(2, "0")}`,
-      });
-    }
+  // Weekday check applies to all campaigns
+  if (!force && !isWeekday(et.weekday)) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: "Weekend — weekdays only",
+      weekday: et.weekday,
+    });
   }
 
   const dateET = etDateString(et);
@@ -138,6 +124,20 @@ export async function POST(req: Request) {
   const results: object[] = [];
 
   for (const campaign of campaigns) {
+    // Check campaign's configured send time (±5 min window)
+    if (!force) {
+      const nowMin = et.hour * 60 + et.minute;
+      const targetMin = campaign.sendHourET * 60 + campaign.sendMinuteET;
+      if (nowMin < targetMin || nowMin > targetMin + 5) {
+        results.push({
+          campaignId: campaign.id,
+          skipped: true,
+          reason: `Outside send window (${String(campaign.sendHourET).padStart(2, "0")}:${String(campaign.sendMinuteET).padStart(2, "0")} ET)`,
+        });
+        continue;
+      }
+    }
+
     // Skip if already ran today
     const existingRun = await prisma.autoCampaignDailyRun.findFirst({
       where: { campaignId: campaign.id, dateET },
