@@ -85,19 +85,11 @@ export async function POST(req: Request) {
   const url = new URL(req.url);
   const force = url.searchParams.get("force") === "1";
 
-  // Auth: Vercel cron header OR manual key
-  const vercelCronHeader = req.headers.get("x-vercel-cron");
+  // Auth: only block if a key is configured AND a wrong key is explicitly provided
   const key = url.searchParams.get("key") || "";
   const expected = process.env.AUTO_CRON_KEY || "";
-  const authorizedByHeader = vercelCronHeader === "1";
-  const authorizedByKey = expected && key === expected;
-
-  if (!authorizedByHeader && !authorizedByKey && !force) {
-    // In non-force mode without auth, still allow (cron calls without key on Vercel)
-    // Only block if there's an expected key and it doesn't match
-    if (expected && key !== expected) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (expected && key && key !== expected) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const et = getETParts();
