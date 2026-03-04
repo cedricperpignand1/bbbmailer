@@ -22,10 +22,6 @@ function etWeekdayKey(d: Date) {
   return (d.getDay() + 6) % 7;
 }
 
-function withinMinutes(a: number, b: number, minutes: number) {
-  return Math.abs(a - b) <= minutes;
-}
-
 function parseAddresses(text: string) {
   return text
     .split("\n")
@@ -85,14 +81,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Weekend — no bucket to run." });
   }
 
-  // time window check (unless force=1)
+  // Time check: only skip if it's BEFORE the configured time.
+  // If at or after the scheduled time and no run yet today → proceed (retries until it succeeds).
   if (!force) {
     const nowMinutes = Number((et as any).hour) * 60 + Number((et as any).minute);
     const scheduledMinutes = auto.sendHourET * 60 + auto.sendMinuteET;
-    if (!withinMinutes(nowMinutes, scheduledMinutes, 10)) {
+    if (nowMinutes < scheduledMinutes) {
       return NextResponse.json({
         ok: false,
-        error: "Not within the scheduled time window (±10 minutes).",
+        error: `Too early — scheduled for ${String(auto.sendHourET).padStart(2, "0")}:${String(auto.sendMinuteET).padStart(2, "0")} ET.`,
       });
     }
   }

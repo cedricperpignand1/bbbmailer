@@ -99,6 +99,7 @@ export default function AutoCampaignsPage() {
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [autoCampaign, setAutoCampaign] = useState<AutoCampaignRow>(null);
   const [dailyRuns, setDailyRuns] = useState<DailyRunRow[]>([]);
+  const [todayRun, setTodayRun] = useState<DailyRunRow | null>(null);
 
   // Gmail connection status
   const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
@@ -147,6 +148,7 @@ export default function AutoCampaignsPage() {
       setCategories(data.categories || []);
       setTemplates(data.templates || []);
       setDailyRuns(data.dailyRuns || []);
+      setTodayRun(data.todayRun ?? null);
 
       const ac: AutoCampaignRow = data.autoCampaign || null;
       setAutoCampaign(ac);
@@ -379,6 +381,41 @@ export default function AutoCampaignsPage() {
           >
             Re-connect
           </a>
+        </div>
+      )}
+
+      {/* Today's Status card */}
+      {autoCampaign && (
+        <div className={`mt-4 flex items-center justify-between rounded-2xl border px-4 py-3 ${
+          !autoCampaign.active
+            ? "border-slate-200 bg-slate-50 text-slate-500"
+            : todayRun
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : "border-amber-200 bg-amber-50 text-amber-800"
+        }`}>
+          <div className="flex items-center gap-3">
+            {!autoCampaign.active ? (
+              <span className="text-sm font-semibold">Campaign paused — no sends scheduled</span>
+            ) : todayRun ? (
+              <>
+                <span className="text-sm font-semibold">Today: sent {todayRun.sentCount} email{todayRun.sentCount !== 1 ? "s" : ""}</span>
+                <span className="text-xs opacity-70">· {new Date(todayRun.ranAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+              </>
+            ) : (
+              <>
+                <svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>
+                <span className="text-sm font-semibold">
+                  Pending — will send at {String(autoCampaign.sendHourET).padStart(2, "0")}:{String(autoCampaign.sendMinuteET).padStart(2, "0")} ET (cron retries every 5 min)
+                </span>
+              </>
+            )}
+          </div>
+          <button onClick={loadAll} disabled={loading} className="text-xs underline opacity-70 hover:opacity-100 disabled:opacity-30">
+            Refresh
+          </button>
         </div>
       )}
 

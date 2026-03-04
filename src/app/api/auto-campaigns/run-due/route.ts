@@ -124,15 +124,16 @@ export async function POST(req: Request) {
   const results: object[] = [];
 
   for (const campaign of campaigns) {
-    // Check campaign's configured send time (±5 min window)
+    // Time check: skip only if before configured time.
+    // At or after → proceed (cron retries every 5 min until run succeeds today).
     if (!force) {
       const nowMin = et.hour * 60 + et.minute;
       const targetMin = campaign.sendHourET * 60 + campaign.sendMinuteET;
-      if (nowMin < targetMin || nowMin > targetMin + 5) {
+      if (nowMin < targetMin) {
         results.push({
           campaignId: campaign.id,
           skipped: true,
-          reason: `Outside send window (${String(campaign.sendHourET).padStart(2, "0")}:${String(campaign.sendMinuteET).padStart(2, "0")} ET)`,
+          reason: `Too early — scheduled for ${String(campaign.sendHourET).padStart(2, "0")}:${String(campaign.sendMinuteET).padStart(2, "0")} ET`,
         });
         continue;
       }

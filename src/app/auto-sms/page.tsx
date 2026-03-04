@@ -44,6 +44,7 @@ export default function AutoSmsPage() {
   const [stats, setStats] = useState({ phoneCount: 0, addressCount: 0 });
   const [runs, setRuns] = useState<Run[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
+  const [todayRun, setTodayRun] = useState<Run | null>(null);
 
   // Phone list section
   const [phonesText, setPhonesText] = useState("");
@@ -75,6 +76,7 @@ export default function AutoSmsPage() {
       setStats(j.stats || { phoneCount: 0, addressCount: 0 });
       setRuns(j.recentRuns || []);
       setLogs(j.recentLogs || []);
+      setTodayRun(j.todayRun ?? null);
       if (j.auto && !addressesDirty) {
         setAddressesText(j.auto.addressesText || "");
       }
@@ -247,6 +249,45 @@ export default function AutoSmsPage() {
             <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
               Sends at {String(auto.sendHourET).padStart(2, "0")}:{String(auto.sendMinuteET).padStart(2, "0")} ET
             </span>
+          </div>
+        )}
+
+        {/* Today's Status card */}
+        {auto && (
+          <div className={`mt-4 flex items-center justify-between rounded-2xl border px-4 py-3 ${
+            !auto.active
+              ? "border-slate-700 bg-slate-900 text-slate-400"
+              : todayRun
+              ? "border-emerald-700 bg-emerald-400/10 text-emerald-300"
+              : "border-amber-600 bg-amber-400/10 text-amber-300"
+          }`}>
+            <div className="flex items-center gap-3">
+              {!auto.active ? (
+                <span className="text-sm font-semibold">Campaign paused — no sends scheduled</span>
+              ) : todayRun ? (
+                <>
+                  <span className="text-sm font-semibold">Today: sent {todayRun.sentCount} message{todayRun.sentCount !== 1 ? "s" : ""}</span>
+                  <span className="text-xs opacity-70">· {new Date(todayRun.ranAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                </>
+              ) : (
+                <>
+                  <svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                  <span className="text-sm font-semibold">
+                    Pending — will send at {String(auto.sendHourET).padStart(2, "0")}:{String(auto.sendMinuteET).padStart(2, "0")} ET (cron retries every 5 min)
+                  </span>
+                </>
+              )}
+            </div>
+            <button
+              onClick={refresh}
+              disabled={loading}
+              className="text-xs underline opacity-70 hover:opacity-100 disabled:opacity-30"
+            >
+              Refresh
+            </button>
           </div>
         )}
 

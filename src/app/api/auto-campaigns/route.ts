@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+function todayET(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -47,10 +56,18 @@ export async function GET() {
       })
     : [];
 
+  const dateET = todayET();
+  const todayRun = autoCampaign
+    ? await prisma.autoCampaignDailyRun.findFirst({
+        where: { campaignId: autoCampaign.id, dateET },
+      })
+    : null;
+
   return NextResponse.json({
     categories,
     templates,
     template: pickTemplate(template),
+    todayRun: todayRun ?? null,
     autoCampaign: autoCampaign
       ? {
           id: autoCampaign.id,
