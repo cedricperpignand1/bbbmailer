@@ -54,6 +54,17 @@ export default function AutoSmsPage() {
   const [addressesText, setAddressesText] = useState("");
   const [addressesDirty, setAddressesDirty] = useState(false);
 
+  // Test SMS
+  const [testPhone, setTestPhone] = useState("");
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    ok?: boolean;
+    error?: string;
+    addressUsed?: string;
+    body?: string;
+    messageId?: string;
+  } | null>(null);
+
   async function refresh() {
     setLoading(true);
     try {
@@ -157,16 +168,24 @@ export default function AutoSmsPage() {
     }
   }
 
-  async function runNow() {
-    setLoading(true);
+  async function sendTestSms() {
+    const phone = testPhone.trim();
+    if (!phone) return setTestResult({ error: "Enter a phone number." });
+    setTestSending(true);
+    setTestResult(null);
     try {
-      const r = await fetch("/api/auto-sms/run-today?force=1", { method: "POST" });
+      const r = await fetch("/api/auto-sms/test-send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ to: phone }),
+      });
       const j = await r.json();
-      if (!j.ok) alert(j.error || "Run failed");
-      else alert(`Sent ${j.sent ?? 0} messages. Address used: ${j.addressUsed ?? "–"}`);
-      await refresh();
+      if (!r.ok) setTestResult({ error: j.error || "Send failed" });
+      else setTestResult({ ok: true, addressUsed: j.addressUsed, body: j.body, messageId: j.messageId });
+    } catch {
+      setTestResult({ error: "Network error" });
     } finally {
-      setLoading(false);
+      setTestSending(false);
     }
   }
 
@@ -182,7 +201,7 @@ export default function AutoSmsPage() {
           <div>
             <h1 className="text-2xl font-bold">Auto SMS</h1>
             <p className="mt-0.5 text-sm text-slate-400">
-              Sends Mon–Fri at 11 am ET · contacts split into 5 daily buckets · random address each run
+              Sends automatically at your chosen time, Mon–Fri · contacts split into 5 daily buckets · random address each run
             </p>
           </div>
           <div className="flex gap-2">
@@ -192,13 +211,6 @@ export default function AutoSmsPage() {
               className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-50"
             >
               Refresh
-            </button>
-            <button
-              onClick={runNow}
-              disabled={loading}
-              className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-50"
-            >
-              Run Now
             </button>
             <button
               onClick={toggleActive}
@@ -489,6 +501,51 @@ export default function AutoSmsPage() {
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Test SMS */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-base font-semibold">Test SMS</h2>
+                <p className="mt-1 text-xs text-slate-400">
+                  Send a single test using the current campaign settings. Does not affect the contact list or run history.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    type="tel"
+                    className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-mono"
+                    placeholder="+13055551212 or 3055551212"
+                    value={testPhone}
+                    onChange={(e) => setTestPhone(e.target.value)}
+                  />
+                  <button
+                    onClick={sendTestSms}
+                    disabled={testSending || !auto}
+                    className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+                    title={!auto ? "Create a campaign first" : "Send a test SMS"}
+                  >
+                    {testSending ? "Sending…" : "Send Test"}
+                  </button>
+                </div>
+                {testResult && (
+                  <div className={`mt-3 rounded-xl border p-3 text-sm ${
+                    testResult.ok
+                      ? "border-emerald-700 bg-emerald-400/10 text-emerald-300"
+                      : "border-rose-700 bg-rose-400/10 text-rose-300"
+                  }`}>
+                    {testResult.ok ? (
+                      <>
+                        <div className="font-semibold">Sent!</div>
+                        <div className="mt-1 text-xs">Address used: <span className="font-medium">{testResult.addressUsed}</span></div>
+                        <div className="mt-0.5 text-xs opacity-75">{testResult.body}</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="font-semibold">Failed</div>
+                        <div className="mt-1">{testResult.error}</div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
