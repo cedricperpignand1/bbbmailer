@@ -6,9 +6,10 @@ export const dynamic = "force-dynamic";
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = Number(params.id);
+  const { id: idStr } = await params;
+  const id = Number(idStr);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
   const body = await req.json().catch(() => null);
