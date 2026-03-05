@@ -5,6 +5,10 @@
       "schedule": "*/5 * * * 1-5"
     },
     {
+      "path": "/api/mass-campaigns/run-due",
+      "schedule": "*/5 * * * 1-5"
+    },
+    {
       "path": "/api/auto-sms/run-today",
       "schedule": "*/5 * * * 1-5"
     }
