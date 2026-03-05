@@ -13,7 +13,10 @@ export async function GET(req: Request) {
   }
 
   try {
-    await exchangeCodeAndStoreMass(code);
+    const redirectUri =
+      process.env.MASS_GOOGLE_REDIRECT_URI ||
+      `${url.origin}/api/mass-gmail/callback`;
+    await exchangeCodeAndStoreMass(code, redirectUri);
     return NextResponse.redirect(new URL("/campaigns", url.origin));
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });

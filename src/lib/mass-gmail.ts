@@ -4,16 +4,16 @@ import { prisma } from "./prisma";
 const SENDER_EMAIL =
   process.env.MASS_GMAIL_SENDER_EMAIL || "projects@mkbuildersbidbook.com";
 
-function createOAuthClient() {
+function createOAuthClient(redirectUri?: string) {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.MASS_GOOGLE_REDIRECT_URI
+    redirectUri || process.env.MASS_GOOGLE_REDIRECT_URI
   );
 }
 
-export function getMassGmailAuthUrl(): string {
-  const client = createOAuthClient();
+export function getMassGmailAuthUrl(redirectUri: string): string {
+  const client = createOAuthClient(redirectUri);
   return client.generateAuthUrl({
     access_type: "offline",
     scope: ["https://www.googleapis.com/auth/gmail.send"],
@@ -21,8 +21,8 @@ export function getMassGmailAuthUrl(): string {
   });
 }
 
-export async function exchangeCodeAndStoreMass(code: string): Promise<void> {
-  const client = createOAuthClient();
+export async function exchangeCodeAndStoreMass(code: string, redirectUri: string): Promise<void> {
+  const client = createOAuthClient(redirectUri);
   const { tokens } = await client.getToken(code);
   if (!tokens.refresh_token) {
     throw new Error(
