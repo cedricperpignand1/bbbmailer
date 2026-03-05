@@ -62,7 +62,10 @@ export async function POST(
   const subject = renderTemplate(tmplSubject, vars);
   const bodyText = renderTemplate(tmplBody, vars);
 
-  const result = await sendViaMassGmail({ to, subject, body: bodyText, contentType });
-
-  return NextResponse.json({ ok: true, messageId: result.messageId, subject, projectUsed: project, to });
+  try {
+    const result = await sendViaMassGmail({ to, subject, body: bodyText, contentType });
+    return NextResponse.json({ ok: true, messageId: result.messageId, subject, projectUsed: project, to });
+  } catch (e: any) {
+    return NextResponse.json({ error: String(e?.message || e || "Gmail send failed") }, { status: 500 });
+  }
 }
