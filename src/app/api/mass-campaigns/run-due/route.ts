@@ -6,6 +6,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+const BATCH_SIZE = 20; // emails per cron run (~2-3 min at 5-10s pacing)
+
 function getETParts(now = new Date()) {
   const dtf = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -107,11 +109,14 @@ export async function POST(req: Request) {
       }
     }
 
+    // Check how many have already been sent today
     const existingRun = await prisma.massCampaignDailyRun.findFirst({
       where: { campaignId: campaign.id, dateET },
     });
-    if (existingRun) {
-      results.push({ campaignId: campaign.id, skipped: true, reason: "Already ran today", dateET });
+    const sentToday = existingRun ? existingRun.sentCount : 0;
+
+    if (sentToday >= campaign.maxPerDay) {
+      results.push({ campaignId: campaign.id, skipped: true, reason: `Daily limit reached (${sentToday}/${campaign.maxPerDay})`, dateET });
       continue;
     }
 
@@ -147,7 +152,10 @@ export async function POST(req: Request) {
       continue;
     }
 
-    // Fetch unsent contacts
+    // Fetch unsent contacts — only up to the remaining daily quota, capped at BATCH_SIZE
+    const remaining = campaign.maxPerDay - sentToday;
+    const batchLimit = Math.min(BATCH_SIZE, remaining);
+
     const sentRows = await prisma.massCampaignSend.findMany({
       where: { campaignId: campaign.id },
       select: { contactId: true },
@@ -161,14 +169,11 @@ export async function POST(req: Request) {
         ...(sentIds.length > 0 ? { id: { notIn: sentIds } } : {}),
       },
       orderBy: { id: "asc" },
-      take: campaign.maxPerDay,
+      take: batchLimit,
     });
 
     if (contacts.length === 0) {
-      await prisma.massCampaignDailyRun.create({
-        data: { campaignId: campaign.id, dateET, sentCount: 0, failedCount: 0 },
-      });
-      results.push({ campaignId: campaign.id, sent: 0, failed: 0, reason: "No unsent contacts remaining" });
+      results.push({ campaignId: campaign.id, skipped: true, reason: "No unsent contacts remaining", sentToday, dateET });
       continue;
     }
 
@@ -210,17 +215,23 @@ export async function POST(req: Request) {
         failed++;
       }
 
-      if (!force && i < contacts.length - 1) {
-        const ms = 2000 + Math.floor(Math.random() * 6000);
+      if (i < contacts.length - 1) {
+        const ms = 5000 + Math.floor(Math.random() * 5000); // 5–10 seconds
         await sleep(ms);
       }
     }
 
-    await prisma.massCampaignDailyRun.create({
-      data: { campaignId: campaign.id, dateET, sentCount: sent, failedCount: failed },
+    // Upsert daily run — increment counts so each batch accumulates
+    await prisma.massCampaignDailyRun.upsert({
+      where: { campaignId_dateET: { campaignId: campaign.id, dateET } },
+      create: { campaignId: campaign.id, dateET, sentCount: sent, failedCount: failed },
+      update: {
+        sentCount: { increment: sent },
+        failedCount: { increment: failed },
+      },
     });
 
-    results.push({ campaignId: campaign.id, sent, failed, dateET });
+    results.push({ campaignId: campaign.id, batchSent: sent, batchFailed: failed, sentToday: sentToday + sent, dailyLimit: campaign.maxPerDay, dateET });
   }
 
   return NextResponse.json({ ok: true, dateET, et, results });
