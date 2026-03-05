@@ -6,8 +6,8 @@ const SENDER_EMAIL =
 
 function createOAuthClient(redirectUri?: string) {
   return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.MASS_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
+    process.env.MASS_GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET,
     redirectUri || process.env.MASS_GOOGLE_REDIRECT_URI
   );
 }
