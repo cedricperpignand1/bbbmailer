@@ -94,6 +94,7 @@ const INLINE_ID = 0;
 export default function AutoCampaignsPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
@@ -245,6 +246,25 @@ export default function AutoCampaignsPage() {
     }
   }
 
+  async function resetSendHistory() {
+    if (!autoCampaign) return;
+    if (!confirm("This will clear all send history so every contact can be emailed again. Continue?")) return;
+    setResetting(true);
+    setError(null);
+    setOkMsg(null);
+    try {
+      const res = await fetch(`/api/auto-campaigns/${autoCampaign.id}/reset`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) return setError(data?.error || "Reset failed");
+      setOkMsg(`Reset complete — ${data.deletedSends} send records cleared.`);
+      await loadAll();
+    } catch {
+      setError("Reset failed");
+    } finally {
+      setResetting(false);
+    }
+  }
+
   async function toggleActive() {
     if (!autoCampaign) return;
     const newActive = !autoCampaign.active;
@@ -338,17 +358,27 @@ export default function AutoCampaignsPage() {
           </button>
 
           {autoCampaign && (
-            <button
-              className={`rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60 ${
-                autoCampaign.active
-                  ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-              }`}
-              onClick={toggleActive}
-              disabled={loading || saving}
-            >
-              {autoCampaign.active ? "Pause" : "Resume"}
-            </button>
+            <>
+              <button
+                className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60"
+                onClick={resetSendHistory}
+                disabled={loading || saving || resetting}
+                title="Clear send history so all contacts can be emailed again"
+              >
+                {resetting ? "Resetting…" : "Reset List"}
+              </button>
+              <button
+                className={`rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60 ${
+                  autoCampaign.active
+                    ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                }`}
+                onClick={toggleActive}
+                disabled={loading || saving}
+              >
+                {autoCampaign.active ? "Pause" : "Resume"}
+              </button>
+            </>
           )}
         </div>
       </div>

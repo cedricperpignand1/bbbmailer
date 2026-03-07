@@ -18,6 +18,7 @@ model Category {
   // Auto Campaigns (MVP uses Category as the "list")
   autoCampaigns    AutoCampaign[]
   massCampaigns    MassCampaign[]
+  mailuCampaigns   MailuCampaign[]
   phoneContacts    PhoneContact[]
   autoSmsCampaigns AutoSmsCampaign[]
 }
@@ -32,9 +33,10 @@ model Contact {
   status      String   @default("active") // active|bounced|unsubscribed|complained
   createdAt   DateTime @default(now())
 
-  sendLogs          SendLog[]
-  autoCampaignSends AutoCampaignSend[]
-  massCampaignSends MassCampaignSend[]
+  sendLogs           SendLog[]
+  autoCampaignSends  AutoCampaignSend[]
+  massCampaignSends  MassCampaignSend[]
+  mailuCampaignSends MailuCampaignSend[]
 
   @@unique([categoryId, email])
   @@index([categoryId, phaseNumber])
@@ -52,6 +54,7 @@ model Template {
   // Auto Campaigns use ONE fixed template
   autoCampaigns  AutoCampaign[]
   massCampaigns  MassCampaign[]
+  mailuCampaigns MailuCampaign[]
 }
 
 model Campaign {
@@ -360,4 +363,98 @@ model SmsSendLog {
   createdAt         DateTime  @default(now())
 
   @@index([autoSmsCampaignId, status, createdAt])
+}
+
+// ── Mailu Mass Campaigns (SMTP via Mailu) ──────────────────────────────────
+
+model MailuCampaign {
+  id     Int     @id @default(autoincrement())
+  name   String  @default("Mailu Campaign")
+  active Boolean @default(false)
+
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  templateId Int?
+  template   Template? @relation(fields: [templateId], references: [id])
+
+  // Inline template (used when templateId is null)
+  templateSubject String @default("")
+  templateBody    String @default("") @db.Text
+
+  // Property addresses — one per line; picked randomly as {{project}}
+  addressesText String @default("") @db.Text
+
+  // Long-term daily limit (reached after warmup)
+  maxPerDay Int @default(275)
+
+  // Sending schedule (ET)
+  sendHourET   Int @default(9)
+  sendMinuteET Int @default(0)
+
+  // Warm-up configuration
+  warmupEnabled   Boolean   @default(true)
+  warmupStartDate DateTime? // set when campaign first activates with warmup
+  // CSV of daily limits: "20,30,45,60,80,100,125,150,180,210,240,275"
+  warmupSchedule String @default("20,30,45,60,80,100,125,150,180,210,240,275")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sends     MailuCampaignSend[]
+  dailyRuns MailuCampaignDailyRun[]
+
+  @@index([active])
+  @@index([categoryId])
+}
+
+model MailuCampaignSend {
+  id Int @id @default(autoincrement())
+
+  campaignId Int
+  campaign   MailuCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  contactId Int
+  contact   Contact @relation(fields: [contactId], references: [id])
+
+  status      String    // SENT | FAILED | BOUNCED
+  sentAt      DateTime?
+  projectUsed String    @default("")
+  messageId   String?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([campaignId, contactId])
+  @@index([campaignId, status])
+  @@index([contactId])
+}
+
+model MailuCampaignDailyRun {
+  id Int @id @default(autoincrement())
+
+  campaignId Int
+  campaign   MailuCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  dateET       String // YYYY-MM-DD
+  ranAt        DateTime @default(now())
+  sentCount    Int      @default(0)
+  failedCount  Int      @default(0)
+  bouncedCount Int      @default(0)
+  warmupDay    Int      @default(0) // which warm-up day this run fell on
+  dailyLimit   Int      @default(0) // the limit that was in effect
+
+  @@unique([campaignId, dateET])
+  @@index([campaignId])
+}
+
+// Global suppression list — hard bounces / unsubscribes from Mailu sends.
+// Once an email is here it is excluded from all future MailuCampaign sends.
+model MailuSuppression {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  type      String   // HARD_BOUNCE | SOFT_BOUNCE | UNSUBSCRIBED | MANUAL
+  detail    String?  // raw SMTP error or reason
+  createdAt DateTime @default(now())
+
+  @@index([email])
 }

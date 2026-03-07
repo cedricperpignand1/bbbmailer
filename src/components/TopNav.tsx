@@ -58,6 +58,7 @@ export default function TopNav() {
       <NavLink href="/templates" label="Templates" />
       <NavLink href="/campaigns" label="Mass Campaigns" />
       <NavLink href="/auto-campaigns" label="Auto Campaigns" />
+      <NavLink href="/mailu-mass" label="Mailu Mass" />
       <NavLink href="/auto-sms" label="Auto SMS" highlight />
     </nav>
   );
