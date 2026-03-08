@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { promises as dns } from "dns";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -7,28 +6,34 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const BATCH_SIZE = 50;
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const API_KEY = process.env.BILLION_VERIFY_API_KEY!;
 
 async function verifyEmail(email: string): Promise<{ invalid: boolean; reason: string }> {
-  if (!EMAIL_REGEX.test(email)) {
-    return { invalid: true, reason: "invalid_format" };
-  }
-
-  const domain = email.split("@")[1].toLowerCase();
-
   try {
-    const records = await dns.resolveMx(domain);
-    if (!records || records.length === 0) {
-      return { invalid: true, reason: "no_mx_records" };
-    }
-    return { invalid: false, reason: "ok" };
+    const res = await fetch("https://api.billionverify.com/v1/verify/single", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "BV-API-KEY": API_KEY,
+      },
+      body: JSON.stringify({ email, check_smtp: true }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!res.ok) return { invalid: false, reason: `api_error:${res.status}` };
+
+    const data = await res.json();
+    // Only remove definitively invalid emails — keep risky/unknown
+    if (data.status === "invalid") return { invalid: true, reason: data.reason ?? "invalid" };
+    return { invalid: false, reason: data.status ?? "ok" };
   } catch {
-    // ENOTFOUND = domain doesn't exist; ENODATA = no MX records
-    return { invalid: true, reason: "no_mx_records" };
+    return { invalid: false, reason: "timeout" };
   }
 }
 
 export async function POST(req: Request) {
+  if (!API_KEY) return NextResponse.json({ error: "BILLION_VERIFY_API_KEY not set" }, { status: 500 });
+
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 
@@ -38,11 +43,7 @@ export async function POST(req: Request) {
   const lastId = Number(body.lastId ?? 0);
 
   const contacts = await prisma.contact.findMany({
-    where: {
-      categoryId,
-      status: "active",
-      id: { gt: lastId },
-    },
+    where: { categoryId, status: "active", emailVerifiedAt: null, id: { gt: lastId } },
     orderBy: { id: "asc" },
     take: BATCH_SIZE,
     select: { id: true, email: true },
@@ -57,12 +58,23 @@ export async function POST(req: Request) {
     contacts.map((c) => verifyEmail(c.email).then((r) => ({ ...c, ...r })))
   );
 
+  const now = new Date();
   const invalid = results.filter((r) => r.invalid);
+  const validIds = results.filter((r) => !r.invalid).map((r) => r.id);
 
+  // Mark invalid as bounced
   if (invalid.length > 0) {
     await prisma.contact.updateMany({
       where: { id: { in: invalid.map((r) => r.id) } },
-      data: { status: "bounced" },
+      data: { status: "bounced", emailVerifiedAt: now },
+    });
+  }
+
+  // Stamp valid ones so they're skipped next time
+  if (validIds.length > 0) {
+    await prisma.contact.updateMany({
+      where: { id: { in: validIds } },
+      data: { emailVerifiedAt: now },
     });
   }
 

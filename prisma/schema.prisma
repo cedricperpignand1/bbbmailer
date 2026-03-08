@@ -30,8 +30,9 @@ model Contact {
   email       String
   firstName   String?
   phaseNumber Int
-  status      String   @default("active") // active|bounced|unsubscribed|complained
-  createdAt   DateTime @default(now())
+  status           String    @default("active") // active|bounced|unsubscribed|complained
+  emailVerifiedAt  DateTime?
+  createdAt        DateTime  @default(now())
 
   sendLogs           SendLog[]
   autoCampaignSends  AutoCampaignSend[]

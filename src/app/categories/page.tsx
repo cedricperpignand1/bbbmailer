@@ -167,7 +167,7 @@ export default function CategoriesPage() {
 
     if (
       !confirm(
-        `Verify all active emails in "${cat?.name}" via Trumail and remove invalid ones?\n\n` +
+        `Verify all active emails in "${cat?.name}" via BillionVerify and remove invalid ones?\n\n` +
           `Up to ${total} contacts will be checked. This may take several minutes.`
       )
     )
@@ -240,7 +240,7 @@ export default function CategoriesPage() {
               className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-100 disabled:opacity-60"
               onClick={cleanList}
               disabled={loading}
-              title="Verify all emails via Trumail and remove invalid addresses"
+              title="Verify all emails via BillionVerify and remove invalid addresses"
             >
               Clean List
             </button>
@@ -467,7 +467,7 @@ b@y.com,XYZ Builders`}
                     </svg>
                     <div className="text-sm font-semibold text-violet-800">Cleaning list…</div>
                   </div>
-                  <Pill tone="blue">via Trumail</Pill>
+                  <Pill tone="blue">via BillionVerify</Pill>
                 </div>
                 <div className="mt-2 text-sm text-violet-700">
                   <span className="font-semibold">{cleanState.checked.toLocaleString()}</span> checked
