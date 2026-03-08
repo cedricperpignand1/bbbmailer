@@ -357,11 +357,24 @@ export default function CategoriesPage() {
                         {active ? <Pill tone="blue">Selected</Pill> : null}
                       </div>
 
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <Pill tone="neutral">Phase {c.phaseSize}</Pill>
-                        <Pill tone={contacts > 0 ? "green" : "neutral"}>
-                          {contacts} contacts
-                        </Pill>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Pill tone="neutral">Phase {c.phaseSize}</Pill>
+                          <Pill tone={contacts > 0 ? "green" : "neutral"}>
+                            {contacts} contacts
+                          </Pill>
+                        </div>
+                        <a
+                          href={`/api/contacts/export?categoryId=${c.id}`}
+                          download
+                          onClick={(e) => e.stopPropagation()}
+                          title="Download CSV"
+                          className="flex items-center justify-center rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </a>
                       </div>
                     </button>
                   );

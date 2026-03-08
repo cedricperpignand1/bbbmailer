@@ -8,7 +8,7 @@ export async function GET() {
   const categories = await prisma.category.findMany({
     orderBy: { createdAt: "desc" },
     include: {
-      _count: { select: { contacts: true } },
+      _count: { select: { contacts: { where: { status: "active" } } } },
     },
   });
   return NextResponse.json({ categories });
