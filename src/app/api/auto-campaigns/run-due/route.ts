@@ -74,6 +74,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Randomised human-like delay between sends */
+function humanDelay(): number {
+  const r = Math.random();
+  if (r < 0.05) return 45000 + Math.random() * 45000; // 5 %  → 45–90 s  (long pause)
+  if (r < 0.20) return 15000 + Math.random() * 20000; // 15 % → 15–35 s  (medium pause)
+  return 5000 + Math.random() * 15000;                 // 80 % →  5–20 s  (normal)
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 // Vercel cron sends GET — delegate to the same handler
@@ -266,10 +274,8 @@ export async function POST(req: Request) {
         failed++;
       }
 
-      // Pacing: 2–8 s between sends (scheduled only — skipped on force/manual runs)
-      if (!force && i < contacts.length - 1) {
-        const ms = 2000 + Math.floor(Math.random() * 6000);
-        await sleep(ms);
+      if (i < contacts.length - 1) {
+        await sleep(humanDelay());
       }
     }
 

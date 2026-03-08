@@ -197,6 +197,12 @@ export async function POST(req: Request) {
         data: { status: "failed", error: err },
       });
 
+      // Auto-remove failed numbers from the list
+      await prisma.phoneContact.update({
+        where: { id: c.id },
+        data: { status: "invalid" },
+      });
+
       errors.push({ to: c.phone, error: err });
     }
   }
