@@ -8,7 +8,47 @@ export const maxDuration = 60;
 const BATCH_SIZE = 50;
 const API_KEY = process.env.BILLION_VERIFY_API_KEY!;
 
-function isKeywordFiltered(email: string, keywords: string[]): boolean {
+// Built-in list — emails whose domain contains any of these are NOT construction contacts
+const BUILTIN_KEYWORDS = [
+  // System / no-reply
+  "noreply", "no-reply", "donotreply", "do-not-reply",
+  "unsubscribe", "postmaster", "mailer-daemon", "bounce@", "abuse@",
+  // Finance / Mortgage
+  "mortgage", "mortgages", "lending", "lender", "loaner", "refinanc",
+  "bankofamerica", "wellsfargo", "jpmorgan", "chasebank", "citibank",
+  "creditunion", "credit-union",
+  // Insurance
+  "insurance", "insure", "insurer", "allstate", "statefarm",
+  // Medical / Dental / Health
+  "dental", "dentist", "dentistry", "orthodont",
+  "medical", "medicine", "hospital", "clinic", "healthcare",
+  "pharmacy", "pharma", "drugstore", "walgreens", "cvs",
+  "doctor", "physician", "pediatric", "surgery", "urgent-care",
+  // Legal
+  "lawyer", "attorney", "lawfirm", "lawoffice", "legalaid",
+  // Restaurant / Food
+  "restaurant", "eatery", "bistro", "pizzeria", "sushi",
+  "catering", "foodservice", "diner",
+  // Hotel / Hospitality
+  "hotel", "motel", "resort", "lodging", "airbnb",
+  // Beauty / Salon
+  "salon", "barbershop", "beauty", "cosmetology", "nailspa",
+  // Religious
+  "church", "temple", "mosque", "synagogue", "parish", "ministry",
+  // Education
+  "preschool", "daycare", "childcare",
+  // Casino / Gambling
+  "casino", "gambling", "sportsbetting",
+  // Marketing / Media agencies (not contractors)
+  "adagency", "mediagroup", "digitalmarketing",
+];
+
+function isBuiltinFiltered(email: string): boolean {
+  const lower = email.toLowerCase();
+  return BUILTIN_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+function isCustomFiltered(email: string, keywords: string[]): boolean {
   if (keywords.length === 0) return false;
   const lower = email.toLowerCase();
   return keywords.some((kw) => lower.includes(kw));
@@ -50,9 +90,9 @@ export async function POST(req: Request) {
 
   const lastId = Number(body.lastId ?? 0);
 
-  // Load filter keywords once per batch
+  // Load user-added custom keywords
   const kwRows = await prisma.filterKeyword.findMany({ select: { keyword: true } });
-  const keywords = kwRows.map((r) => r.keyword);
+  const customKeywords = kwRows.map((r) => r.keyword);
 
   const contacts = await prisma.contact.findMany({
     where: { categoryId, status: "active", emailVerifiedAt: null, id: { gt: lastId } },
@@ -68,8 +108,12 @@ export async function POST(req: Request) {
   const now = new Date();
 
   // Step 1: keyword pre-filter (free — no API credits used)
-  const keywordFiltered = contacts.filter((c) => isKeywordFiltered(c.email, keywords));
-  const toVerify = contacts.filter((c) => !isKeywordFiltered(c.email, keywords));
+  const keywordFiltered = contacts.filter(
+    (c) => isBuiltinFiltered(c.email) || isCustomFiltered(c.email, customKeywords)
+  );
+  const toVerify = contacts.filter(
+    (c) => !isBuiltinFiltered(c.email) && !isCustomFiltered(c.email, customKeywords)
+  );
 
   if (keywordFiltered.length > 0) {
     await prisma.contact.updateMany({
