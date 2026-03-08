@@ -44,6 +44,12 @@ function formatDateTime(x: string) {
   });
 }
 
+type CleanState =
+  | { status: "idle" }
+  | { status: "running"; checked: number; removed: number }
+  | { status: "done"; checked: number; removed: number }
+  | { status: "error"; message: string };
+
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,6 +66,10 @@ export default function CategoriesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [q, setQ] = useState("");
+
+  // Email cleaning state
+  const [cleanState, setCleanState] = useState<CleanState>({ status: "idle" });
+  const cleanCancelRef = React.useRef(false);
 
   async function loadCategories() {
     setLoading(true);
@@ -150,6 +160,67 @@ export default function CategoriesPage() {
     }
   }
 
+  async function cleanList() {
+    if (!selectedCategoryId) return;
+    const cat = categories.find((c) => c.id === selectedCategoryId);
+    const total = cat?._count?.contacts ?? 0;
+
+    if (
+      !confirm(
+        `Verify all active emails in "${cat?.name}" via Trumail and remove invalid ones?\n\n` +
+          `Up to ${total} contacts will be checked. This may take several minutes.`
+      )
+    )
+      return;
+
+    cleanCancelRef.current = false;
+    setCleanState({ status: "running", checked: 0, removed: 0 });
+    setError(null);
+
+    let lastId = 0;
+    let totalChecked = 0;
+    let totalRemoved = 0;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      if (cleanCancelRef.current) break;
+
+      try {
+        const res = await fetch("/api/contacts/clean", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ categoryId: selectedCategoryId, lastId }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setCleanState({ status: "error", message: data?.error || "Clean failed" });
+          return;
+        }
+
+        const data = await res.json();
+        totalChecked += data.processed;
+        totalRemoved += data.removed;
+        lastId = data.nextLastId ?? lastId;
+
+        setCleanState({ status: "running", checked: totalChecked, removed: totalRemoved });
+
+        if (data.done) break;
+      } catch {
+        setCleanState({ status: "error", message: "Network error during cleaning" });
+        return;
+      }
+    }
+
+    setCleanState({ status: "done", checked: totalChecked, removed: totalRemoved });
+    await loadCategories();
+  }
+
+  function cancelClean() {
+    cleanCancelRef.current = true;
+    setCleanState({ status: "idle" });
+  }
+
   return (
     <main className="mx-auto max-w-6xl">
       {/* Page header */}
@@ -164,6 +235,24 @@ export default function CategoriesPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {selectedCategoryId && cleanState.status !== "running" && (
+            <button
+              className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-100 disabled:opacity-60"
+              onClick={cleanList}
+              disabled={loading}
+              title="Verify all emails via Trumail and remove invalid addresses"
+            >
+              Clean List
+            </button>
+          )}
+          {cleanState.status === "running" && (
+            <button
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              onClick={cancelClean}
+            >
+              Cancel Clean
+            </button>
+          )}
           <button
             className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
             onClick={loadCategories}
@@ -353,6 +442,63 @@ b@y.com,XYZ Builders`}
                 </div>
               ) : null}
             </div>
+
+            {/* Clean progress */}
+            {cleanState.status === "running" && (
+              <div className="mt-5 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="h-4 w-4 animate-spin text-violet-600" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                    </svg>
+                    <div className="text-sm font-semibold text-violet-800">Cleaning list…</div>
+                  </div>
+                  <Pill tone="blue">via Trumail</Pill>
+                </div>
+                <div className="mt-2 text-sm text-violet-700">
+                  <span className="font-semibold">{cleanState.checked.toLocaleString()}</span> checked
+                  {" · "}
+                  <span className="font-semibold text-red-600">{cleanState.removed.toLocaleString()}</span> removed
+                </div>
+                <div className="mt-1 text-xs text-violet-500">
+                  Processing 10 emails per batch. Keep this tab open until complete.
+                </div>
+              </div>
+            )}
+
+            {cleanState.status === "done" && (
+              <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-emerald-800">List cleaned</div>
+                  <Pill tone="green">Done</Pill>
+                </div>
+                <div className="mt-1 text-sm text-emerald-700">
+                  Checked <span className="font-semibold">{cleanState.checked.toLocaleString()}</span> emails
+                  {" · "}
+                  Removed <span className="font-semibold">{cleanState.removed.toLocaleString()}</span> invalid addresses
+                </div>
+                <button
+                  className="mt-2 text-xs text-emerald-600 underline hover:text-emerald-800"
+                  onClick={() => setCleanState({ status: "idle" })}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {cleanState.status === "error" && (
+              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4">
+                <div className="text-sm font-semibold text-red-800">Clean failed</div>
+                <div className="mt-1 text-sm text-red-700">{cleanState.message}</div>
+                <button
+                  className="mt-2 text-xs text-red-600 underline hover:text-red-800"
+                  onClick={() => setCleanState({ status: "idle" })}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
 
             {/* Result */}
             {importResult?.summary && (
