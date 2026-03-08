@@ -448,6 +448,12 @@ model MailuCampaignDailyRun {
   @@index([campaignId])
 }
 
+model FilterKeyword {
+  id        Int      @id @default(autoincrement())
+  keyword   String   @unique
+  createdAt DateTime @default(now())
+}
+
 // Global suppression list — hard bounces / unsubscribes from Mailu sends.
 // Once an email is here it is excluded from all future MailuCampaign sends.
 model MailuSuppression {

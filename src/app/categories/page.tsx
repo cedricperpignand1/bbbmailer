@@ -71,6 +71,41 @@ export default function CategoriesPage() {
   const [cleanState, setCleanState] = useState<CleanState>({ status: "idle" });
   const cleanCancelRef = React.useRef(false);
 
+  // Filter keywords state
+  type KwRow = { id: number; keyword: string };
+  const [keywords, setKeywords] = useState<KwRow[]>([]);
+  const [newKeyword, setNewKeyword] = useState("");
+  const [kwError, setKwError] = useState<string | null>(null);
+
+  async function loadKeywords() {
+    const res = await fetch("/api/filter-keywords");
+    const data = await res.json();
+    setKeywords(data.keywords ?? []);
+  }
+
+  async function addKeyword() {
+    setKwError(null);
+    const kw = newKeyword.trim().toLowerCase();
+    if (!kw) return;
+    const res = await fetch("/api/filter-keywords", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword: kw }),
+    });
+    if (!res.ok) { setKwError("Already exists"); return; }
+    setNewKeyword("");
+    loadKeywords();
+  }
+
+  async function removeKeyword(id: number) {
+    await fetch("/api/filter-keywords", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    loadKeywords();
+  }
+
   async function loadCategories() {
     setLoading(true);
     setError(null);
@@ -90,6 +125,7 @@ export default function CategoriesPage() {
 
   useEffect(() => {
     loadCategories();
+    loadKeywords();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -386,6 +422,49 @@ export default function CategoriesPage() {
                     </button>
                   );
                 })
+              )}
+            </div>
+          </div>
+          {/* Keyword filter */}
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="text-xs font-semibold text-slate-700 mb-2">Keyword Filters</div>
+            <p className="text-xs text-slate-500 mb-3">
+              Emails whose address contains any keyword are removed before BillionVerify.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g. mortgage"
+                value={newKeyword}
+                onChange={(e) => setNewKeyword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addKeyword()}
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-300"
+              />
+              <button
+                onClick={addKeyword}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Add
+              </button>
+            </div>
+            {kwError && <p className="mt-1 text-xs text-red-600">{kwError}</p>}
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {keywords.map((kw) => (
+                <span
+                  key={kw.id}
+                  className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-700"
+                >
+                  {kw.keyword}
+                  <button
+                    onClick={() => removeKeyword(kw.id)}
+                    className="ml-0.5 text-orange-400 hover:text-orange-700"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {keywords.length === 0 && (
+                <span className="text-xs text-slate-400">No keywords yet</span>
               )}
             </div>
           </div>
