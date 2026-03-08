@@ -177,6 +177,13 @@ export default function CategoriesPage() {
     setCleanState({ status: "running", checked: 0, removed: 0 });
     setError(null);
 
+    // Reset all verification stamps so every contact gets re-checked fresh
+    await fetch("/api/contacts/reset-verification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryId: selectedCategoryId }),
+    });
+
     let lastId = 0;
     let totalChecked = 0;
     let totalRemoved = 0;
