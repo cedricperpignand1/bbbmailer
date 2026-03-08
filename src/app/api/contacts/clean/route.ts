@@ -22,10 +22,13 @@ async function verifyEmail(email: string): Promise<{ invalid: boolean; reason: s
 
     if (!res.ok) return { invalid: false, reason: `api_error:${res.status}` };
 
-    const data = await res.json();
-    // Only remove definitively invalid emails — keep risky/unknown
-    if (data.status === "invalid") return { invalid: true, reason: data.reason ?? "invalid" };
-    return { invalid: false, reason: data.status ?? "ok" };
+    const json = await res.json();
+    const status: string = json?.data?.status ?? json?.status ?? "";
+    // Remove invalid and disposable — keep role/catchall/risky/unknown
+    if (status === "invalid" || status === "disposable") {
+      return { invalid: true, reason: status };
+    }
+    return { invalid: false, reason: status || "ok" };
   } catch {
     return { invalid: false, reason: "timeout" };
   }
