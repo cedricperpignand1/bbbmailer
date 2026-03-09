@@ -63,11 +63,20 @@ export async function GET() {
       })
     : null;
 
+  // Fetch the most recent send error for today (to surface Gmail failures)
+  const lastFailedSend = autoCampaign && todayRun && todayRun.failedCount > 0
+    ? await prisma.autoCampaignSend.findFirst({
+        where: { campaignId: autoCampaign.id, status: "FAILED" },
+        orderBy: { createdAt: "desc" },
+        select: { error: true },
+      })
+    : null;
+
   return NextResponse.json({
     categories,
     templates,
     template: pickTemplate(template),
-    todayRun: todayRun ?? null,
+    todayRun: todayRun ? { ...todayRun, lastError: lastFailedSend?.error ?? null } : null,
     autoCampaign: autoCampaign
       ? {
           id: autoCampaign.id,

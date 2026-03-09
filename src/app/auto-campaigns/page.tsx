@@ -38,6 +38,7 @@ type DailyRunRow = {
   ranAt: string;
   sentCount: number;
   failedCount: number;
+  lastError?: string | null;
 };
 
 function Pill({
@@ -420,17 +421,25 @@ export default function AutoCampaignsPage() {
           !autoCampaign.active
             ? "border-slate-200 bg-slate-50 text-slate-500"
             : todayRun
-            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            ? todayRun.sentCount === 0 && todayRun.failedCount > 0
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800"
             : "border-amber-200 bg-amber-50 text-amber-800"
         }`}>
           <div className="flex items-center gap-3">
             {!autoCampaign.active ? (
               <span className="text-sm font-semibold">Campaign paused — no sends scheduled</span>
             ) : todayRun ? (
-              <>
-                <span className="text-sm font-semibold">Today: sent {todayRun.sentCount} email{todayRun.sentCount !== 1 ? "s" : ""}</span>
-                <span className="text-xs opacity-70">· {new Date(todayRun.ranAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-              </>
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold">Today: sent {todayRun.sentCount} email{todayRun.sentCount !== 1 ? "s" : ""}</span>
+                  {todayRun.failedCount > 0 && <span className="text-sm font-semibold text-red-600">{todayRun.failedCount} failed</span>}
+                  <span className="text-xs opacity-70">· {new Date(todayRun.ranAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                </div>
+                {todayRun.lastError && (
+                  <div className="text-xs text-red-700 font-mono break-all">{todayRun.lastError}</div>
+                )}
+              </div>
             ) : (
               <>
                 <svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
