@@ -45,10 +45,18 @@ export async function GET() {
       })
     : null;
 
+  const lastFailedSend = massCampaign && todayRun && todayRun.failedCount > 0
+    ? await prisma.massCampaignSend.findFirst({
+        where: { campaignId: massCampaign.id, status: "FAILED" },
+        orderBy: { createdAt: "desc" },
+        select: { error: true },
+      })
+    : null;
+
   return NextResponse.json({
     categories,
     templates,
-    todayRun: todayRun ?? null,
+    todayRun: todayRun ? { ...todayRun, lastError: lastFailedSend?.error ?? null } : null,
     massCampaign: massCampaign
       ? {
           id: massCampaign.id,
