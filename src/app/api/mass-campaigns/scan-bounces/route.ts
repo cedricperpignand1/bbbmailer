@@ -75,69 +75,85 @@ function extractBouncedEmails(payload: any): string[] {
 }
 
 export async function POST() {
-  const account = await prisma.gmailAccount.findUnique({
-    where: { email: SENDER_EMAIL },
-  });
+  try {
+    const account = await prisma.gmailAccount.findUnique({
+      where: { email: SENDER_EMAIL },
+    });
 
-  if (!account?.refreshToken) {
-    return NextResponse.json(
-      { error: `Gmail not connected for ${SENDER_EMAIL}` },
-      { status: 400 }
-    );
-  }
-
-  const client = createOAuthClient();
-  client.setCredentials({ refresh_token: account.refreshToken });
-  const gmail = google.gmail({ version: "v1", auth: client });
-
-  // Search inbox for bounce-back messages from the last 30 days
-  const query =
-    "from:(mailer-daemon OR postmaster) newer_than:30d";
-
-  const listRes = await gmail.users.messages.list({
-    userId: "me",
-    q: query,
-    maxResults: 100,
-  });
-
-  const messages = listRes.data.messages ?? [];
-  if (messages.length === 0) {
-    return NextResponse.json({ ok: true, bouncesFound: 0, contactsMarked: 0 });
-  }
-
-  const bouncedEmails = new Set<string>();
-
-  for (const msg of messages) {
-    try {
-      const full = await gmail.users.messages.get({
-        userId: "me",
-        id: msg.id!,
-        format: "full",
-      });
-      const found = extractBouncedEmails(full.data.payload);
-      for (const e of found) bouncedEmails.add(e);
-    } catch {
-      // skip unreadable messages
+    if (!account?.refreshToken) {
+      return NextResponse.json(
+        { error: `Gmail not connected for ${SENDER_EMAIL}` },
+        { status: 400 }
+      );
     }
+
+    const client = createOAuthClient();
+    client.setCredentials({ refresh_token: account.refreshToken });
+    const gmail = google.gmail({ version: "v1", auth: client });
+
+    // Search inbox for bounce-back messages from the last 30 days
+    const query = "from:(mailer-daemon OR postmaster) newer_than:30d";
+
+    let listRes;
+    try {
+      listRes = await gmail.users.messages.list({
+        userId: "me",
+        q: query,
+        maxResults: 100,
+      });
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      if (msg.includes("insufficient") || msg.includes("scope") || msg.includes("forbidden") || e?.status === 403) {
+        return NextResponse.json(
+          { error: "Gmail account needs read permission. Click Re-connect on this page to re-authorize with the required scope, then try again." },
+          { status: 400 }
+        );
+      }
+      throw e;
+    }
+
+    const messages = listRes.data.messages ?? [];
+    if (messages.length === 0) {
+      return NextResponse.json({ ok: true, bouncesFound: 0, contactsMarked: 0 });
+    }
+
+    const bouncedEmails = new Set<string>();
+
+    for (const msg of messages) {
+      try {
+        const full = await gmail.users.messages.get({
+          userId: "me",
+          id: msg.id!,
+          format: "full",
+        });
+        const found = extractBouncedEmails(full.data.payload);
+        for (const e of found) bouncedEmails.add(e);
+      } catch {
+        // skip unreadable messages
+      }
+    }
+
+    if (bouncedEmails.size === 0) {
+      return NextResponse.json({ ok: true, bouncesFound: messages.length, contactsMarked: 0 });
+    }
+
+    // Mark all matching contacts as bounced across all categories
+    const result = await prisma.contact.updateMany({
+      where: {
+        email: { in: [...bouncedEmails] },
+        status: "active",
+      },
+      data: { status: "bounced" },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      bouncesFound: messages.length,
+      bouncedEmails: [...bouncedEmails],
+      contactsMarked: result.count,
+    });
+  } catch (e: any) {
+    const msg = String(e?.message || e || "Unknown error");
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
-
-  if (bouncedEmails.size === 0) {
-    return NextResponse.json({ ok: true, bouncesFound: messages.length, contactsMarked: 0 });
-  }
-
-  // Mark all matching contacts as bounced across all categories
-  const result = await prisma.contact.updateMany({
-    where: {
-      email: { in: [...bouncedEmails] },
-      status: "active",
-    },
-    data: { status: "bounced" },
-  });
-
-  return NextResponse.json({
-    ok: true,
-    bouncesFound: messages.length,
-    bouncedEmails: [...bouncedEmails],
-    contactsMarked: result.count,
-  });
 }
