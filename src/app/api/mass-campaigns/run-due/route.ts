@@ -64,6 +64,28 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Returns true if the Gmail API error indicates a permanent address failure
+ * (hard bounce / invalid recipient). These contacts are safe to mark as bounced.
+ * Does NOT match auth errors, rate limits, or transient failures.
+ */
+function isHardBounce(errMsg: string): boolean {
+  const lower = errMsg.toLowerCase();
+  return (
+    /\b55[0-9]\b/.test(errMsg) ||            // SMTP 550–559 permanent failures
+    lower.includes("no such user") ||
+    lower.includes("user does not exist") ||
+    lower.includes("user unknown") ||
+    lower.includes("address not found") ||
+    lower.includes("mailbox not found") ||
+    lower.includes("invalid recipient") ||
+    lower.includes("recipient address rejected") ||
+    lower.includes("does not exist") ||
+    lower.includes("undeliverable") ||
+    /5\.\d\.\d/.test(errMsg)                 // SMTP enhanced codes 5.x.x
+  );
+}
+
 /** Randomised human-like delay between sends — kept short to fit within 300s maxDuration */
 function humanDelay(): number {
   const r = Math.random();
@@ -211,6 +233,7 @@ export async function POST(req: Request) {
         sent++;
       } catch (e: any) {
         const errMsg = String(e?.message || e || "Unknown error").slice(0, 1000);
+        const bounced = isHardBounce(errMsg);
         await prisma.massCampaignSend.create({
           data: {
             campaignId: campaign.id,
@@ -220,6 +243,12 @@ export async function POST(req: Request) {
             error: errMsg,
           },
         });
+        if (bounced) {
+          await prisma.contact.update({
+            where: { id: contact.id },
+            data: { status: "bounced" },
+          });
+        }
         failed++;
       }
 
