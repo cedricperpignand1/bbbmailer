@@ -289,9 +289,13 @@ export default function MassCampaignsPage() {
     try {
       const res = await fetch("/api/mass-campaigns/scan-bounces", { method: "POST" });
       const data = await res.json();
-      if (!res.ok) return setError(data?.error || "Scan failed");
-      setOkMsg(`Bounce scan complete — ${data.bouncesFound} bounce emails found, ${data.contactsMarked} contacts marked as bounced.`);
+      if (!res.ok) {
+        setError(data?.error || "Scan failed");
+        return;
+      }
+      // loadAll resets okMsg, so set the message after it finishes
       await loadAll();
+      setOkMsg(`Bounce scan complete — ${data.bouncesFound} bounce emails found, ${data.contactsMarked} contacts marked as bounced.`);
     } catch {
       setError("Bounce scan failed — network error");
     } finally {
