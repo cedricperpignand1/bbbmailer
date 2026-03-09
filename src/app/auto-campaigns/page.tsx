@@ -131,6 +131,7 @@ export default function AutoCampaignsPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   async function loadAll() {
     setLoading(true);
@@ -282,6 +283,26 @@ export default function AutoCampaignsPage() {
       setOkMsg(newActive ? "Campaign resumed." : "Campaign paused.");
     } catch {
       setError("Toggle failed");
+    }
+  }
+
+  async function scanBounces() {
+    setScanning(true);
+    setError(null);
+    setOkMsg(null);
+    try {
+      const res = await fetch("/api/auto-campaigns/scan-bounces", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.error || "Scan failed");
+        return;
+      }
+      await loadAll();
+      setOkMsg(`Bounce scan complete — ${data.bouncesFound} bounce emails found, ${data.contactsMarked} contacts marked as bounced.`);
+    } catch {
+      setError("Bounce scan failed — network error");
+    } finally {
+      setScanning(false);
     }
   }
 
@@ -764,7 +785,17 @@ export default function AutoCampaignsPage() {
                     Gmail sends — one run per campaign per day.
                   </p>
                 </div>
-                <Pill tone="blue">Gmail</Pill>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={scanBounces}
+                    disabled={scanning}
+                    title="Scan buildersbidbook@gmail.com inbox for bounce-back emails and mark those contacts as bounced"
+                    className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-60"
+                  >
+                    {scanning ? "Scanning…" : "Scan Bounces"}
+                  </button>
+                  <Pill tone="blue">Gmail</Pill>
+                </div>
               </div>
             </div>
 

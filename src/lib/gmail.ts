@@ -16,7 +16,10 @@ export function getGmailAuthUrl(): string {
   const client = createOAuthClient();
   return client.generateAuthUrl({
     access_type: "offline",
-    scope: ["https://www.googleapis.com/auth/gmail.send"],
+    scope: [
+      "https://www.googleapis.com/auth/gmail.send",
+      "https://www.googleapis.com/auth/gmail.readonly",
+    ],
     prompt: "consent",
   });
 }
