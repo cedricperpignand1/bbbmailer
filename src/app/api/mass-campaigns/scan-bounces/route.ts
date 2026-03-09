@@ -17,60 +17,97 @@ function createOAuthClient() {
   );
 }
 
-/** Extract bounced email addresses from a Gmail message payload */
-function extractBouncedEmails(payload: any): string[] {
+const EMAIL_RE = /[\w.+%-]+@[\w.-]+\.[a-z]{2,}/gi;
+
+function allMatches(text: string): string[] {
+  return [...text.matchAll(EMAIL_RE)].map((m) => m[0].toLowerCase());
+}
+
+/** Extract bounced email addresses from a Gmail message (full object with payload) */
+function extractBouncedEmails(message: any): string[] {
   const emails = new Set<string>();
+  const payload = message?.payload;
+  if (!payload) return [];
 
-  // Decode base64url body parts recursively
-  function scanPart(part: any) {
+  function addEmail(addr: string) {
+    const clean = addr.trim().toLowerCase();
+    if (clean.includes("@")) emails.add(clean);
+  }
+
+  function scanHeaders(headers: any[]) {
+    if (!headers) return;
+    for (const h of headers) {
+      const name = h.name?.toLowerCase() ?? "";
+      const val: string = h.value ?? "";
+      // Direct bounce recipient headers
+      if (name === "x-failed-recipients" || name === "x-original-to") {
+        for (const e of allMatches(val)) addEmail(e);
+      }
+      // "To:" inside embedded original message (message/rfc822 part)
+      if (name === "to" || name === "delivered-to") {
+        for (const e of allMatches(val)) addEmail(e);
+      }
+    }
+  }
+
+  function scanText(text: string) {
+    // Final-Recipient / Original-Recipient DSN fields
+    for (const m of text.matchAll(
+      /(?:Final|Original)-Recipient:\s*rfc822;\s*([\w.+%-]+@[\w.-]+\.[a-z]{2,})/gi
+    )) addEmail(m[1]);
+
+    // Prose bounce messages: "following address(es) failed", "undeliverable", etc.
+    for (const m of text.matchAll(
+      /(?:address(?:es)? failed|undeliverable to|delivery (?:has )?failed|could not be delivered to)[\s\S]{0,300}?([\w.+%-]+@[\w.-]+\.[a-z]{2,})/gi
+    )) addEmail(m[1]);
+  }
+
+  function scanPart(part: any, isEmbeddedOriginal = false) {
     if (!part) return;
+    const mime: string = part.mimeType ?? "";
 
-    // Check headers for X-Failed-Recipients
-    if (part.headers) {
+    scanHeaders(part.headers);
+
+    // Only extract "To:" addresses when we are inside the embedded original
+    // message (message/rfc822) — not from the outer bounce wrapper
+    if (isEmbeddedOriginal && part.headers) {
       for (const h of part.headers) {
-        if (h.name?.toLowerCase() === "x-failed-recipients") {
-          for (const addr of h.value.split(",")) {
-            const m = addr.trim().match(/[\w.+%-]+@[\w.-]+\.[a-z]{2,}/i);
-            if (m) emails.add(m[0].toLowerCase());
-          }
+        if (h.name?.toLowerCase() === "to") {
+          for (const e of allMatches(h.value ?? "")) addEmail(e);
         }
       }
     }
 
-    // Scan text body for bounce patterns
     if (part.body?.data) {
       try {
-        const text = Buffer.from(part.body.data, "base64").toString("utf-8");
-
-        // "Final-Recipient: rfc822; user@example.com"
-        const finalRecipient = text.matchAll(
-          /Final-Recipient:\s*rfc822;\s*([\w.+%-]+@[\w.-]+\.[a-z]{2,})/gi
-        );
-        for (const m of finalRecipient) emails.add(m[1].toLowerCase());
-
-        // "Original-Recipient: rfc822; user@example.com"
-        const origRecipient = text.matchAll(
-          /Original-Recipient:\s*rfc822;\s*([\w.+%-]+@[\w.-]+\.[a-z]{2,})/gi
-        );
-        for (const m of origRecipient) emails.add(m[1].toLowerCase());
-
-        // "The following address(es) failed:\n  user@example.com"
-        const failedAddr = text.matchAll(
-          /(?:address(?:es)? failed|undeliverable to|delivery has failed)[\s\S]{0,200}?([\w.+%-]+@[\w.-]+\.[a-z]{2,})/gi
-        );
-        for (const m of failedAddr) emails.add(m[1].toLowerCase());
+        const text = Buffer.from(part.body.data, "base64url").toString("utf-8");
+        scanText(text);
       } catch {
-        // ignore decode errors
+        try {
+          const text = Buffer.from(part.body.data, "base64").toString("utf-8");
+          scanText(text);
+        } catch { /* ignore */ }
       }
     }
 
-    // Recurse into nested parts
     if (part.parts) {
-      for (const child of part.parts) scanPart(child);
+      for (const child of part.parts) {
+        scanPart(child, isEmbeddedOriginal || mime === "message/rfc822");
+      }
     }
   }
 
+  // Check top-level message headers first (most reliable for X-Failed-Recipients)
+  scanHeaders(payload.headers);
   scanPart(payload);
+
+  // Also scan the raw snippet Gmail provides — often contains the bounced address
+  if (message.snippet) {
+    for (const m of message.snippet.matchAll(
+      /(?:to|for|address)[\s:]+<?([\w.+%-]+@[\w.-]+\.[a-z]{2,})>?/gi
+    )) addEmail(m[1]);
+  }
+
   return [...emails];
 }
 
@@ -126,7 +163,7 @@ export async function POST() {
           id: msg.id!,
           format: "full",
         });
-        const found = extractBouncedEmails(full.data.payload);
+        const found = extractBouncedEmails(full.data);
         for (const e of found) bouncedEmails.add(e);
       } catch {
         // skip unreadable messages
