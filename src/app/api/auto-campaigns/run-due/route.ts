@@ -4,7 +4,9 @@ import { sendViaGmail } from "@/lib/gmail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 300; // up to 5 min for paced sending
+export const maxDuration = 300;
+
+const BATCH_SIZE = 12; // emails per cron run — safe within 300s limit
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -74,12 +76,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Randomised human-like delay between sends */
+/** Randomised human-like delay between sends — kept short to fit within 300s maxDuration */
 function humanDelay(): number {
   const r = Math.random();
-  if (r < 0.05) return 45000 + Math.random() * 45000; // 5 %  → 45–90 s  (long pause)
-  if (r < 0.20) return 15000 + Math.random() * 20000; // 15 % → 15–35 s  (medium pause)
-  return 5000 + Math.random() * 15000;                 // 80 % →  5–20 s  (normal)
+  if (r < 0.05) return 15000 + Math.random() * 15000; // 5 %  → 15–30 s
+  if (r < 0.20) return 8000 + Math.random() * 7000;   // 15 % →  8–15 s
+  return 3000 + Math.random() * 5000;                  // 80 % →  3–8 s
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -129,8 +131,7 @@ export async function POST(req: Request) {
   const results: object[] = [];
 
   for (const campaign of campaigns) {
-    // Time check: skip only if before configured time.
-    // At or after → proceed (cron retries every 5 min until run succeeds today).
+    // Time check: skip if before configured send time
     if (!force) {
       const nowMin = et.hour * 60 + et.minute;
       const targetMin = campaign.sendHourET * 60 + campaign.sendMinuteET;
@@ -144,15 +145,17 @@ export async function POST(req: Request) {
       }
     }
 
-    // Skip if already ran today
+    // Check how many have already been sent today
     const existingRun = await prisma.autoCampaignDailyRun.findFirst({
       where: { campaignId: campaign.id, dateET },
     });
-    if (existingRun) {
+    const sentToday = existingRun ? existingRun.sentCount : 0;
+
+    if (sentToday >= campaign.maxPerDay) {
       results.push({
         campaignId: campaign.id,
         skipped: true,
-        reason: "Already ran today",
+        reason: `Daily limit reached (${sentToday}/${campaign.maxPerDay})`,
         dateET,
       });
       continue;
@@ -199,7 +202,10 @@ export async function POST(req: Request) {
       continue;
     }
 
-    // Fetch unsent contacts (not yet in AutoCampaignSend for this campaign)
+    // Fetch unsent contacts — only up to the remaining daily quota, capped at BATCH_SIZE
+    const remaining = campaign.maxPerDay - sentToday;
+    const batchLimit = Math.min(BATCH_SIZE, remaining);
+
     const sentRows = await prisma.autoCampaignSend.findMany({
       where: { campaignId: campaign.id },
       select: { contactId: true },
@@ -213,18 +219,22 @@ export async function POST(req: Request) {
         ...(sentIds.length > 0 ? { id: { notIn: sentIds } } : {}),
       },
       orderBy: { id: "asc" },
-      take: campaign.maxPerDay,
+      take: batchLimit,
     });
 
     if (contacts.length === 0) {
-      await prisma.autoCampaignDailyRun.create({
-        data: { campaignId: campaign.id, dateET, sentCount: 0, failedCount: 0 },
+      // Record an empty run so the page shows "ran today" instead of "pending"
+      await prisma.autoCampaignDailyRun.upsert({
+        where: { campaignId_dateET: { campaignId: campaign.id, dateET } },
+        create: { campaignId: campaign.id, dateET, sentCount: 0, failedCount: 0 },
+        update: {},
       });
       results.push({
         campaignId: campaign.id,
         sent: 0,
         failed: 0,
         reason: "No unsent contacts remaining",
+        dateET,
       });
       continue;
     }
@@ -279,16 +289,24 @@ export async function POST(req: Request) {
       }
     }
 
-    await prisma.autoCampaignDailyRun.create({
-      data: {
-        campaignId: campaign.id,
-        dateET,
-        sentCount: sent,
-        failedCount: failed,
+    // Upsert daily run — increment counts so each batch accumulates
+    await prisma.autoCampaignDailyRun.upsert({
+      where: { campaignId_dateET: { campaignId: campaign.id, dateET } },
+      create: { campaignId: campaign.id, dateET, sentCount: sent, failedCount: failed },
+      update: {
+        sentCount: { increment: sent },
+        failedCount: { increment: failed },
       },
     });
 
-    results.push({ campaignId: campaign.id, sent, failed, dateET });
+    results.push({
+      campaignId: campaign.id,
+      batchSent: sent,
+      batchFailed: failed,
+      sentToday: sentToday + sent,
+      dailyLimit: campaign.maxPerDay,
+      dateET,
+    });
   }
 
   return NextResponse.json({ ok: true, dateET, et, results });

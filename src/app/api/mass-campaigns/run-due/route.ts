@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const BATCH_SIZE = 20; // emails per cron run (~2-3 min at 5-10s pacing)
+const BATCH_SIZE = 12; // emails per cron run — safe within 300s limit
 
 function getETParts(now = new Date()) {
   const dtf = new Intl.DateTimeFormat("en-US", {
@@ -64,12 +64,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Randomised human-like delay between sends */
+/** Randomised human-like delay between sends — kept short to fit within 300s maxDuration */
 function humanDelay(): number {
   const r = Math.random();
-  if (r < 0.05) return 45000 + Math.random() * 45000; // 5 %  → 45–90 s  (long pause)
-  if (r < 0.20) return 15000 + Math.random() * 20000; // 15 % → 15–35 s  (medium pause)
-  return 5000 + Math.random() * 15000;                 // 80 % →  5–20 s  (normal)
+  if (r < 0.05) return 15000 + Math.random() * 15000; // 5 %  → 15–30 s
+  if (r < 0.20) return 8000 + Math.random() * 7000;   // 15 % →  8–15 s
+  return 3000 + Math.random() * 5000;                  // 80 % →  3–8 s
 }
 
 // Vercel cron sends GET — delegate to the same handler
