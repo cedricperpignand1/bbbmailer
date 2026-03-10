@@ -6,20 +6,40 @@ import { nowET, isWeekdayET } from "@/lib/market";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** ISO week key e.g. "2026-W08" – used for dedup so each weekday bucket fires once per week */
-function isoWeekKey(date: Date): string {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  // shift to Thursday so ISO week year is consistent
-  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
-  const yearStart = new Date(d.getFullYear(), 0, 1);
-  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
+/** Get ET date parts (year, month, day) from Intl — timezone-safe on Vercel (UTC servers) */
+function getETDateParts() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return {
+    year: Number(get("year")),
+    month: Number(get("month")),
+    day: Number(get("day")),
+    weekday: get("weekday"), // "Mon", "Tue", ...
+  };
 }
 
-/** Mon=0 … Fri=4, Sat=5, Sun=6 */
-function etWeekdayKey(d: Date) {
-  return (d.getDay() + 6) % 7;
+/** ISO week key e.g. "2026-W08" — computed from the ET calendar date, not UTC */
+function isoWeekKey(): string {
+  const { year, month, day } = getETDateParts();
+  // Build a UTC noon date for this ET calendar day (avoids DST boundary issues)
+  const d = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+/** Mon=0 … Fri=4, Sat=5, Sun=6 — derived from ET weekday, NOT server local time */
+function etWeekdayKey(): number {
+  const { weekday } = getETDateParts();
+  const map: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+  return map[weekday] ?? 6;
 }
 
 function parseAddresses(text: string) {
@@ -61,9 +81,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Pick a Contact list first" });
   }
 
-  const et = nowET();
-  const etDate: Date = (et as any).date ?? new Date();
-
   // auto-stop after N days from activation
   if (auto.startAt) {
     const stopMs = auto.stopAfterDays * 24 * 60 * 60 * 1000;
@@ -81,14 +98,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Scheduled runs only happen Mon–Fri (ET)." });
   }
 
-  const weekday = etWeekdayKey(etDate); // 0..4
+  const weekday = etWeekdayKey(); // 0..4, derived from ET timezone
   if (weekday > 4) {
     return NextResponse.json({ ok: false, error: "Weekend — no bucket to run." });
   }
 
   // Time check: only skip if it's BEFORE the configured time.
-  // If at or after the scheduled time and no run yet today → proceed (retries until it succeeds).
   if (!force) {
+    const et = nowET();
     const nowMinutes = Number((et as any).hour) * 60 + Number((et as any).minute);
     const scheduledMinutes = auto.sendHourET * 60 + auto.sendMinuteET;
     if (nowMinutes < scheduledMinutes) {
@@ -100,7 +117,7 @@ export async function POST(req: Request) {
   }
 
   // dedup per week (reuses monthKey column — stored as "2026-W08")
-  const weekKey = isoWeekKey(etDate);
+  const weekKey = isoWeekKey();
 
   const already = await prisma.autoSmsRun.findUnique({
     where: {
