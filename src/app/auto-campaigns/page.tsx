@@ -132,6 +132,7 @@ export default function AutoCampaignsPage() {
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [bounceDebug, setBounceDebug] = useState<{ id: string; subject: string; snippet: string; extracted: string[] }[] | null>(null);
 
   async function loadAll() {
     setLoading(true);
@@ -290,6 +291,7 @@ export default function AutoCampaignsPage() {
     setScanning(true);
     setError(null);
     setOkMsg(null);
+    setBounceDebug(null);
     try {
       const res = await fetch("/api/auto-campaigns/scan-bounces", { method: "POST" });
       const data = await res.json();
@@ -299,6 +301,7 @@ export default function AutoCampaignsPage() {
       }
       await loadAll();
       setOkMsg(`Bounce scan complete — ${data.bouncesFound} bounce emails found, ${data.contactsMarked} contacts marked as bounced.`);
+      if (data.debugMessages) setBounceDebug(data.debugMessages);
     } catch {
       setError("Bounce scan failed — network error");
     } finally {
@@ -490,6 +493,24 @@ export default function AutoCampaignsPage() {
         <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
           <div className="font-semibold">OK</div>
           <div className="mt-1">{okMsg}</div>
+        </div>
+      )}
+
+      {bounceDebug && (
+        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs">
+          <div className="mb-2 font-semibold text-slate-700">Bounce scan debug — {bounceDebug.length} messages inspected</div>
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {bounceDebug.map((m) => (
+              <div key={m.id} className="rounded-lg border border-slate-200 bg-white p-2">
+                <div className="font-medium text-slate-800 truncate">{m.subject}</div>
+                <div className="text-slate-500 truncate">{m.snippet}</div>
+                {m.extracted.length > 0
+                  ? <div className="mt-1 text-emerald-700">Extracted: {m.extracted.join(", ")}</div>
+                  : <div className="mt-1 text-red-500">No address extracted</div>
+                }
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

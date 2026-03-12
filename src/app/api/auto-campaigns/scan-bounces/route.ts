@@ -146,6 +146,7 @@ export async function POST() {
     }
 
     const bouncedEmails = new Set<string>();
+    const debugMessages: { id: string; subject: string; snippet: string; extracted: string[] }[] = [];
 
     for (const msg of messages) {
       try {
@@ -156,13 +157,29 @@ export async function POST() {
         });
         const found = extractBouncedEmails(full.data);
         for (const e of found) bouncedEmails.add(e);
+
+        const subject = full.data.payload?.headers?.find(
+          (h: any) => h.name?.toLowerCase() === "subject"
+        )?.value ?? "(no subject)";
+        debugMessages.push({
+          id: msg.id!,
+          subject,
+          snippet: full.data.snippet ?? "",
+          extracted: found,
+        });
       } catch {
         // skip unreadable messages
       }
     }
 
     if (bouncedEmails.size === 0) {
-      return NextResponse.json({ ok: true, bouncesFound: messages.length, contactsMarked: 0 });
+      return NextResponse.json({
+        ok: true,
+        bouncesFound: messages.length,
+        contactsMarked: 0,
+        extractedEmails: [],
+        debugMessages,
+      });
     }
 
     const result = await prisma.contact.updateMany({
@@ -176,8 +193,9 @@ export async function POST() {
     return NextResponse.json({
       ok: true,
       bouncesFound: messages.length,
-      bouncedEmails: [...bouncedEmails],
+      extractedEmails: [...bouncedEmails],
       contactsMarked: result.count,
+      debugMessages,
     });
   } catch (e: any) {
     const msg = String(e?.message || e || "Unknown error");
