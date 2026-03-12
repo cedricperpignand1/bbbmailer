@@ -147,6 +147,7 @@ export async function POST() {
 
     const bouncedEmails = new Set<string>();
     const debugMessages: { id: string; subject: string; snippet: string; extracted: string[] }[] = [];
+    const SENDER_LOWER = SENDER_EMAIL.toLowerCase();
 
     for (const msg of messages) {
       try {
@@ -155,7 +156,7 @@ export async function POST() {
           id: msg.id!,
           format: "full",
         });
-        const found = extractBouncedEmails(full.data);
+        const found = extractBouncedEmails(full.data).filter((e) => e !== SENDER_LOWER);
         for (const e of found) bouncedEmails.add(e);
 
         const subject = full.data.payload?.headers?.find(
