@@ -60,6 +60,7 @@ export default function TopNav() {
       <NavLink href="/auto-campaigns" label="Auto Campaigns" />
       <NavLink href="/mailu-mass" label="Mailu Mass" />
       <NavLink href="/auto-sms" label="Auto SMS" highlight />
+      <NavLink href="/instagram" label="Instagram" />
     </nav>
   );
 }

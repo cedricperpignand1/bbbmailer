@@ -448,6 +448,50 @@ model MailuCampaignDailyRun {
   @@index([campaignId])
 }
 
+// ── Instagram Bot ─────────────────────────────────────────────────────────────
+
+model IgBotConfig {
+  id             Int      @id @default(1) // singleton row
+  username       String   @default("")
+  igPassword     String   @default("") // stored for Vercel use
+  igSession      String?  @db.Text     // serialized session JSON
+  isActive       Boolean  @default(false)
+  isPaused       Boolean  @default(false)
+  target         String   @default("timeline") // timeline | followers | following
+  likesPerDayMin Int      @default(20)
+  likesPerDayMax Int      @default(40)
+  likesPerTick   Int      @default(2)   // likes per 5-min cron tick
+  runHourUTC     Int      @default(14)  // window start (UTC)
+  runWindowHours Int      @default(3)   // how many hours the window spans
+  updatedAt      DateTime @updatedAt
+
+  runs     IgBotRun[]
+  dailyRuns IgBotDailyRun[]
+}
+
+model IgBotRun {
+  id        Int      @id @default(autoincrement())
+  configId  Int      @default(1)
+  config    IgBotConfig @relation(fields: [configId], references: [id])
+  startedAt DateTime @default(now())
+  liked     Int      @default(0)
+  skipped   Int      @default(0)
+  note      String   @default("") // e.g. "daily limit reached"
+
+  @@index([startedAt])
+}
+
+model IgBotDailyRun {
+  id         Int      @id @default(autoincrement())
+  configId   Int      @default(1)
+  config     IgBotConfig @relation(fields: [configId], references: [id])
+  dateStr    String   // YYYY-MM-DD UTC
+  likedCount Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([configId, dateStr])
+}
+
 model FilterKeyword {
   id        Int      @id @default(autoincrement())
   keyword   String   @unique
