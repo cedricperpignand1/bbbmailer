@@ -11,7 +11,7 @@ type IgConfig = {
   likesPerDayMin: number;
   likesPerDayMax: number;
   likesPerTick: number;
-  runHourUTC: number;
+  runHourET: number;
   runWindowHours: number;
   hasCredentials: boolean;
   hasSession: boolean;
@@ -61,11 +61,10 @@ function fmt(dt: string) {
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 
-// Convert UTC hour to local display string
-function utcHourToLocal(utcHour: number): string {
-  const d = new Date();
-  d.setUTCHours(utcHour, 0, 0, 0);
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+function etHourToDisplay(etHour: number): string {
+  const suffix = etHour >= 12 ? "PM" : "AM";
+  const h = etHour % 12 || 12;
+  return `${h}:00 ${suffix} ET`;
 }
 
 export default function InstagramPage() {
@@ -84,7 +83,7 @@ export default function InstagramPage() {
   const [minLikes, setMinLikes] = useState(20);
   const [maxLikes, setMaxLikes] = useState(40);
   const [likesPerTick, setLikesPerTick] = useState(2);
-  const [runHourUTC, setRunHourUTC] = useState(14);
+  const [runHourET, setRunHourET] = useState(10);
   const [runWindowHours, setRunWindowHours] = useState(3);
 
   async function load() {
@@ -101,7 +100,7 @@ export default function InstagramPage() {
       setMinLikes(data.config.likesPerDayMin);
       setMaxLikes(data.config.likesPerDayMax);
       setLikesPerTick(data.config.likesPerTick);
-      setRunHourUTC(data.config.runHourUTC);
+      setRunHourET(data.config.runHourET);
       setRunWindowHours(data.config.runWindowHours);
     } finally {
       setLoading(false);
@@ -117,7 +116,7 @@ export default function InstagramPage() {
       const body: Record<string, unknown> = {
         username, target,
         likesPerDayMin: minLikes, likesPerDayMax: maxLikes,
-        likesPerTick, runHourUTC, runWindowHours,
+        likesPerTick, runHourET, runWindowHours,
       };
       if (password) body.igPassword = password;
 
@@ -208,7 +207,7 @@ export default function InstagramPage() {
         <p className="text-xs text-slate-400">
           Cron runs every 5 min ·{" "}
           {config?.isActive && !config?.isPaused
-            ? `window ${utcHourToLocal(config.runHourUTC)} – ${utcHourToLocal((config.runHourUTC + config.runWindowHours) % 24)} local`
+            ? `window ${etHourToDisplay(config.runHourET)} – ${etHourToDisplay((config.runHourET + config.runWindowHours) % 24)}`
             : "bot is inactive"}
         </p>
       </div>
@@ -295,11 +294,11 @@ export default function InstagramPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700">Window start <span className="text-slate-400 font-normal">(UTC)</span></label>
-                <select value={runHourUTC} onChange={(e) => setRunHourUTC(Number(e.target.value))}
+                <label className="text-xs font-semibold text-slate-700">Window start <span className="text-slate-400 font-normal">(Eastern Time)</span></label>
+                <select value={runHourET} onChange={(e) => setRunHourET(Number(e.target.value))}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-slate-300">
                   {Array.from({ length: 24 }, (_, i) => (
-                    <option key={i} value={i}>{pad2(i)}:00 UTC</option>
+                    <option key={i} value={i}>{etHourToDisplay(i)}</option>
                   ))}
                 </select>
               </div>

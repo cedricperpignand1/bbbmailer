@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     likesPerDayMin: Number(body.likesPerDayMin) || 20,
     likesPerDayMax: Number(body.likesPerDayMax) || 40,
     likesPerTick: Math.max(1, Math.min(5, Number(body.likesPerTick) || 2)),
-    runHourUTC: Number(body.runHourUTC) ?? 14,
+    runHourET: Number(body.runHourET) ?? 14,
     runWindowHours: Math.max(1, Math.min(12, Number(body.runWindowHours) || 3)),
   };
 

@@ -461,7 +461,7 @@ model IgBotConfig {
   likesPerDayMin Int      @default(20)
   likesPerDayMax Int      @default(40)
   likesPerTick   Int      @default(2)   // likes per 5-min cron tick
-  runHourUTC     Int      @default(14)  // window start (UTC)
+  runHourET      Int      @default(10)  // window start (Eastern Time)
   runWindowHours Int      @default(3)   // how many hours the window spans
   updatedAt      DateTime @updatedAt
 

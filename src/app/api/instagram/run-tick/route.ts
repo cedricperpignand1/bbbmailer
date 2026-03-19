@@ -12,15 +12,22 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 55;
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+function nowET() {
+  // Returns a Date-like object with hour/minute in Eastern Time (handles DST)
+  const etStr = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
+  return new Date(etStr);
 }
 
-function isInWindow(runHourUTC: number, windowHours: number): boolean {
-  const hour = new Date().getUTCHours();
-  const end = (runHourUTC + windowHours) % 24;
-  if (end > runHourUTC) return hour >= runHourUTC && hour < end;
-  return hour >= runHourUTC || hour < end; // wraps midnight
+function todayStr() {
+  const et = nowET();
+  return `${et.getFullYear()}-${String(et.getMonth() + 1).padStart(2, "0")}-${String(et.getDate()).padStart(2, "0")}`;
+}
+
+function isInWindow(runHourET: number, windowHours: number): boolean {
+  const hour = nowET().getHours();
+  const end = (runHourET + windowHours) % 24;
+  if (end > runHourET) return hour >= runHourET && hour < end;
+  return hour >= runHourET || hour < end; // wraps midnight
 }
 
 async function getOrCreateSession(
@@ -58,7 +65,7 @@ export async function POST() {
   if (!cfg.username || !cfg.igPassword)
     return NextResponse.json({ skip: "no credentials" });
 
-  if (!isInWindow(cfg.runHourUTC, cfg.runWindowHours))
+  if (!isInWindow(cfg.runHourET, cfg.runWindowHours)) // runHourET field now stores ET hour
     return NextResponse.json({ skip: "outside window" });
 
   // Check daily limit
