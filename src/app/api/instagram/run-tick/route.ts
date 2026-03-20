@@ -50,7 +50,7 @@ async function getOrCreateSession(
   }
 
   try {
-    await ig.account.login(username, password);
+    await ig.account.login(username.trim(), password.trim());
     console.log("[ig-bot] logged in fresh");
   } catch (e) {
     if (e instanceof IgCheckpointError) {
