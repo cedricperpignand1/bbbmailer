@@ -16,7 +16,9 @@ export async function POST() {
   ig.state.generateDevice(cfg.username.trim());
 
   try {
+    await ig.simulate.preLoginFlow();
     await ig.account.login(cfg.username.trim(), cfg.igPassword.trim());
+    await ig.simulate.postLoginFlow();
     const user = await ig.account.currentUser();
 
     // Save the fresh session
@@ -48,7 +50,7 @@ export async function POST() {
     if (e instanceof IgLoginBadPasswordError) {
       return NextResponse.json({
         ok: false,
-        error: "BAD_PASSWORD — Instagram rejected the password. Double-check it at instagram.com first.",
+        error: "BAD_PASSWORD — Instagram rejected the login. If your password is correct, try logging out of all Instagram sessions at instagram.com, wait a few minutes, then retry.",
       });
     }
     if (e instanceof IgLoginTwoFactorRequiredError) {
