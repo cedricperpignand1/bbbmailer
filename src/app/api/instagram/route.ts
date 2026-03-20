@@ -61,6 +61,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(safe);
   }
 
+  if (body.action === "import-session") {
+    if (!body.session) return NextResponse.json({ error: "session required" }, { status: 400 });
+    // Validate it's parseable JSON with expected shape
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(body.session);
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+    if (!parsed.cookies && !parsed.authorization_token) {
+      return NextResponse.json({ error: "Session JSON looks invalid (missing cookies/token)" }, { status: 400 });
+    }
+    const cfg = await prisma.igBotConfig.upsert({
+      where: { id: 1 },
+      create: { id: 1, igSession: body.session, challengePending: false },
+      update: { igSession: body.session, challengePending: false },
+    });
+    const { igPassword: _, igSession: __, ...safe } = cfg;
+    return NextResponse.json({ ...safe, hasSession: true });
+  }
+
   if (body.action === "disconnect") {
     const cfg = await prisma.igBotConfig.upsert({
       where: { id: 1 },

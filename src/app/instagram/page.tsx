@@ -79,6 +79,8 @@ export default function InstagramPage() {
   const [challengeCode, setChallengeCode] = useState("");
   const [challengeLoading, setChallengeLoading] = useState(false);
   const [testingLogin, setTestingLogin] = useState(false);
+  const [importSession, setImportSession] = useState("");
+  const [importingSession, setImportingSession] = useState(false);
 
   // form
   const [username, setUsername] = useState("");
@@ -188,6 +190,27 @@ export default function InstagramPage() {
       setMsg({ ok: false, text: "Request failed — check network." });
     } finally {
       setTestingLogin(false);
+    }
+  }
+
+  async function doImportSession() {
+    setImportingSession(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/instagram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "import-session", session: importSession.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setImportSession("");
+      setMsg({ ok: true, text: "Session imported! Bot is ready." });
+      await load();
+    } catch (e) {
+      setMsg({ ok: false, text: `Import failed: ${e}` });
+    } finally {
+      setImportingSession(false);
     }
   }
 
@@ -404,6 +427,32 @@ export default function InstagramPage() {
                 Clear saved session
               </button>
             )}
+          </div>
+
+          {/* Import Session */}
+          <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 space-y-3">
+            <div>
+              <p className="text-sm font-bold text-violet-800">Import Session (local login)</p>
+              <p className="text-xs text-violet-700 mt-0.5">
+                If login fails from Vercel&apos;s IP, run this locally on your machine first:
+              </p>
+              <pre className="mt-1.5 text-[11px] bg-violet-100 text-violet-900 rounded-lg px-3 py-2 overflow-x-auto">node scripts/ig-login.mjs</pre>
+              <p className="text-xs text-violet-700 mt-1.5">Then paste the JSON output below:</p>
+            </div>
+            <textarea
+              value={importSession}
+              onChange={(e) => setImportSession(e.target.value)}
+              placeholder='{"cookies": [...], ...}'
+              rows={3}
+              className="w-full border border-violet-300 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-violet-400 bg-white resize-none"
+            />
+            <button
+              onClick={doImportSession}
+              disabled={importingSession || !importSession.trim()}
+              className="w-full bg-violet-600 text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-violet-700 disabled:opacity-60 transition"
+            >
+              {importingSession ? "Importing…" : "Import Session"}
+            </button>
           </div>
 
           {/* Info box */}
