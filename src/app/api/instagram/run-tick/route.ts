@@ -6,7 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { IgApiClient, IgCheckpointError } from "instagram-private-api";
+import { IgApiClient } from "instagram-private-api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,27 +42,7 @@ async function getOrCreateSession(
   }
 
   await ig.state.deserialize(savedSession);
-  try {
-    await ig.account.currentUser(); // verify session still valid
-    console.log("[ig-bot] session restored");
-  } catch (e) {
-    if (e instanceof IgCheckpointError) {
-      await ig.challenge.auto(true);
-      const state = await ig.state.serialize();
-      delete (state as Record<string, unknown>).constants;
-      await prisma.igBotConfig.update({
-        where: { id: 1 },
-        data: { igSession: JSON.stringify(state), challengePending: true },
-      });
-      throw new Error("CHALLENGE_REQUIRED");
-    }
-    // Session expired — clear it so the UI shows "Not connected"
-    await prisma.igBotConfig.update({
-      where: { id: 1 },
-      data: { igSession: null },
-    });
-    throw new Error("SESSION_EXPIRED — re-run 'node scripts/ig-login.mjs' locally and re-import.");
-  }
+  console.log("[ig-bot] session restored");
   return savedSession;
 }
 
