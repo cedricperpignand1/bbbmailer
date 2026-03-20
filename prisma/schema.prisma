@@ -461,9 +461,10 @@ model IgBotConfig {
   likesPerDayMin Int      @default(20)
   likesPerDayMax Int      @default(40)
   likesPerTick   Int      @default(2)   // likes per 5-min cron tick
-  runHourET      Int      @default(10)  // window start (Eastern Time)
-  runWindowHours Int      @default(3)   // how many hours the window spans
-  updatedAt      DateTime @updatedAt
+  runHourET         Int      @default(10)  // window start (Eastern Time)
+  runWindowHours    Int      @default(3)   // how many hours the window spans
+  challengePending  Boolean  @default(false) // waiting for user to enter IG challenge code
+  updatedAt         DateTime @updatedAt
 
   runs     IgBotRun[]
   dailyRuns IgBotDailyRun[]

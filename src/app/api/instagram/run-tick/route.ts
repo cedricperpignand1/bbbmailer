@@ -6,7 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { IgApiClient } from "instagram-private-api";
+import { IgApiClient, IgCheckpointError, IgLoginBadPasswordError } from "instagram-private-api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,8 +49,26 @@ async function getOrCreateSession(
     }
   }
 
-  await ig.account.login(username, password);
-  console.log("[ig-bot] logged in fresh");
+  try {
+    await ig.account.login(username, password);
+    console.log("[ig-bot] logged in fresh");
+  } catch (e) {
+    if (e instanceof IgCheckpointError) {
+      // Instagram requires a verification code — request it via email
+      await ig.challenge.auto(true);
+      const state = await ig.state.serialize();
+      delete (state as Record<string, unknown>).constants;
+      await prisma.igBotConfig.update({
+        where: { id: 1 },
+        data: { igSession: JSON.stringify(state), challengePending: true },
+      });
+      throw new Error("CHALLENGE_REQUIRED");
+    }
+    if (e instanceof IgLoginBadPasswordError) {
+      throw new Error("BAD_PASSWORD");
+    }
+    throw e;
+  }
   const serialized = await ig.state.serialize();
   delete (serialized as Record<string, unknown>).constants;
   return JSON.stringify(serialized);
@@ -64,6 +82,9 @@ export async function POST() {
   if (cfg.isPaused) return NextResponse.json({ skip: "paused" });
   if (!cfg.username || !cfg.igPassword)
     return NextResponse.json({ skip: "no credentials" });
+
+  if (cfg.challengePending)
+    return NextResponse.json({ skip: "challenge pending — enter code in the Instagram tab" });
 
   if (!isInWindow(cfg.runHourET, cfg.runWindowHours)) // runHourET field now stores ET hour
     return NextResponse.json({ skip: "outside window" });

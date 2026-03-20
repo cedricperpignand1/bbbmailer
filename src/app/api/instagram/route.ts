@@ -27,7 +27,7 @@ export async function GET() {
   // strip password from response
   const { igPassword: _, igSession: __, ...safeConfig } = config;
   const hasCredentials = !!config.username && !!config.igPassword;
-  const hasSession = !!config.igSession;
+  const hasSession = !!config.igSession && !config.challengePending;
   const totalLikes = runs.reduce((s, r) => s + r.liked, 0);
 
   return NextResponse.json({

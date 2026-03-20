@@ -15,6 +15,7 @@ type IgConfig = {
   runWindowHours: number;
   hasCredentials: boolean;
   hasSession: boolean;
+  challengePending: boolean;
   updatedAt: string;
 };
 
@@ -75,6 +76,8 @@ export default function InstagramPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [challengeCode, setChallengeCode] = useState("");
+  const [challengeLoading, setChallengeLoading] = useState(false);
 
   // form
   const [username, setUsername] = useState("");
@@ -147,6 +150,27 @@ export default function InstagramPage() {
     setConfig((prev) => ({ ...prev!, ...cfg }));
   }
 
+  async function submitChallenge() {
+    setChallengeLoading(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/instagram/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: challengeCode.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setChallengeCode("");
+      setMsg({ ok: true, text: "Verified! Bot will start liking on the next tick." });
+      await load();
+    } catch (e) {
+      setMsg({ ok: false, text: `Wrong code or expired: ${e}` });
+    } finally {
+      setChallengeLoading(false);
+    }
+  }
+
   async function disconnect() {
     if (!confirm("Clear saved session? The bot will need to log in again on next tick.")) return;
     const res = await fetch("/api/instagram", {
@@ -178,11 +202,42 @@ export default function InstagramPage() {
           <p className="text-sm text-slate-500 mt-0.5">Auto-like posts on a schedule — fully serverless on Vercel</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {config?.hasSession ? <Pill tone="green">Connected</Pill> : <Pill tone="neutral">Not connected</Pill>}
+          {config?.challengePending ? <Pill tone="amber">Verification needed</Pill> : config?.hasSession ? <Pill tone="green">Connected</Pill> : <Pill tone="neutral">Not connected</Pill>}
           {config?.isActive ? <Pill tone="blue">Active</Pill> : <Pill tone="neutral">Inactive</Pill>}
           {config?.isPaused && <Pill tone="amber">Paused</Pill>}
         </div>
       </div>
+
+      {/* Challenge banner */}
+      {config?.challengePending && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-bold text-amber-800">Instagram verification required</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Instagram sent a code to your email or phone. Enter it below to verify and connect.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={challengeCode}
+              onChange={(e) => setChallengeCode(e.target.value)}
+              placeholder="Enter 6-digit code"
+              maxLength={8}
+              className="flex-1 border border-amber-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-400 bg-white"
+            />
+            <button
+              onClick={submitChallenge}
+              disabled={challengeLoading || !challengeCode.trim()}
+              className="bg-amber-500 text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-amber-600 disabled:opacity-60 transition"
+            >
+              {challengeLoading ? "Verifying…" : "Verify"}
+            </button>
+          </div>
+          {msg && (
+            <p className={`text-xs font-medium ${msg.ok ? "text-emerald-700" : "text-red-600"}`}>{msg.text}</p>
+          )}
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
