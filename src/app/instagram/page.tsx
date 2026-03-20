@@ -371,7 +371,7 @@ export default function InstagramPage() {
               {saving ? "Saving…" : "Save Settings"}
             </button>
 
-            {config?.hasSession && (
+            {config?.hasCredentials && (
               <button onClick={disconnect}
                 className="w-full border border-red-200 text-red-600 rounded-xl px-4 py-2 text-xs font-medium hover:bg-red-50 transition">
                 Clear saved session
