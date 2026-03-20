@@ -6,7 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { IgApiClient, IgCheckpointError, IgLoginBadPasswordError } from "instagram-private-api";
+import { IgApiClient, IgCheckpointError } from "instagram-private-api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,28 +33,20 @@ function isInWindow(runHourET: number, windowHours: number): boolean {
 async function getOrCreateSession(
   ig: IgApiClient,
   username: string,
-  password: string,
   savedSession: string | null
 ): Promise<string> {
   ig.state.generateDevice(username);
 
-  if (savedSession) {
-    try {
-      await ig.state.deserialize(savedSession);
-      await ig.account.currentUser(); // verify session still valid
-      console.log("[ig-bot] session restored");
-      return savedSession; // still good
-    } catch {
-      console.log("[ig-bot] session expired, re-logging in");
-    }
+  if (!savedSession) {
+    throw new Error("SESSION_REQUIRED — no session saved. Use 'Import Session' on the Instagram tab.");
   }
 
+  await ig.state.deserialize(savedSession);
   try {
-    await ig.account.login(username.trim(), password.trim());
-    console.log("[ig-bot] logged in fresh");
+    await ig.account.currentUser(); // verify session still valid
+    console.log("[ig-bot] session restored");
   } catch (e) {
     if (e instanceof IgCheckpointError) {
-      // Instagram requires a verification code — request it via email
       await ig.challenge.auto(true);
       const state = await ig.state.serialize();
       delete (state as Record<string, unknown>).constants;
@@ -64,14 +56,14 @@ async function getOrCreateSession(
       });
       throw new Error("CHALLENGE_REQUIRED");
     }
-    if (e instanceof IgLoginBadPasswordError) {
-      throw new Error("BAD_PASSWORD");
-    }
-    throw e;
+    // Session expired — clear it so the UI shows "Not connected"
+    await prisma.igBotConfig.update({
+      where: { id: 1 },
+      data: { igSession: null },
+    });
+    throw new Error("SESSION_EXPIRED — re-run 'node scripts/ig-login.mjs' locally and re-import.");
   }
-  const serialized = await ig.state.serialize();
-  delete (serialized as Record<string, unknown>).constants;
-  return JSON.stringify(serialized);
+  return savedSession;
 }
 
 export async function POST() {
@@ -118,7 +110,6 @@ export async function POST() {
     const session = await getOrCreateSession(
       ig,
       cfg.username,
-      cfg.igPassword,
       cfg.igSession
     );
 
