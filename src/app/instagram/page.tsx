@@ -78,6 +78,7 @@ export default function InstagramPage() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [challengeCode, setChallengeCode] = useState("");
   const [challengeLoading, setChallengeLoading] = useState(false);
+  const [testingLogin, setTestingLogin] = useState(false);
 
   // form
   const [username, setUsername] = useState("");
@@ -168,6 +169,25 @@ export default function InstagramPage() {
       setMsg({ ok: false, text: `Wrong code or expired: ${e}` });
     } finally {
       setChallengeLoading(false);
+    }
+  }
+
+  async function testLogin() {
+    setTestingLogin(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/instagram/test-login", { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        setMsg({ ok: true, text: data.message });
+        await load();
+      } else {
+        setMsg({ ok: false, text: data.error });
+      }
+    } catch {
+      setMsg({ ok: false, text: "Request failed — check network." });
+    } finally {
+      setTestingLogin(false);
     }
   }
 
@@ -370,6 +390,13 @@ export default function InstagramPage() {
               className="w-full bg-slate-900 text-white rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 disabled:opacity-60 transition">
               {saving ? "Saving…" : "Save Settings"}
             </button>
+
+            {config?.hasCredentials && (
+              <button onClick={testLogin} disabled={testingLogin}
+                className="w-full border border-sky-300 text-sky-700 rounded-xl px-4 py-2 text-xs font-semibold hover:bg-sky-50 disabled:opacity-60 transition">
+                {testingLogin ? "Testing login…" : "Test Login Now"}
+              </button>
+            )}
 
             {config?.hasCredentials && (
               <button onClick={disconnect}
