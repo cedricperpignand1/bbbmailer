@@ -109,7 +109,7 @@ export async function POST() {
       mediaItems = await feed.items() as typeof mediaItems;
     } else {
       // followers or following: pick a random user and get their recent posts
-      const myId = (await ig.account.currentUser()).pk;
+      const myId = ig.state.cookieUserId;
       let users: Array<{ pk: number }> = [];
       if (cfg.target === "followers") {
         users = await ig.feed.accountFollowers(myId).items() as typeof users;
