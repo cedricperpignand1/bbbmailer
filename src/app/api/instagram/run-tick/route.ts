@@ -109,18 +109,25 @@ export async function POST() {
       mediaItems = await feed.items() as typeof mediaItems;
     } else {
       // followers or following: pick a random user and get their recent posts
-      const myId = ig.state.cookieUserId;
-      let users: Array<{ pk: number }> = [];
-      if (cfg.target === "followers") {
-        users = await ig.feed.accountFollowers(myId).items() as typeof users;
-      } else {
-        users = await ig.feed.accountFollowing(myId).items() as typeof users;
-      }
-      if (users.length > 0) {
-        const pick = users[Math.floor(Math.random() * Math.min(users.length, 20))] as { pk: number };
-        const userFeed = ig.feed.user(String(pick.pk));
-        const posts = await userFeed.items() as typeof mediaItems;
-        mediaItems = posts;
+      // Falls back to timeline if the endpoint is blocked
+      try {
+        const myId = ig.state.cookieUserId;
+        let users: Array<{ pk: number }> = [];
+        if (cfg.target === "followers") {
+          users = await ig.feed.accountFollowers(myId).items() as typeof users;
+        } else {
+          users = await ig.feed.accountFollowing(myId).items() as typeof users;
+        }
+        if (users.length > 0) {
+          const pick = users[Math.floor(Math.random() * Math.min(users.length, 20))] as { pk: number };
+          const userFeed = ig.feed.user(String(pick.pk));
+          const posts = await userFeed.items() as typeof mediaItems;
+          mediaItems = posts;
+        }
+      } catch {
+        // Blocked from cloud IP — fall back to timeline
+        console.log("[ig-bot] followers/following blocked, falling back to timeline");
+        mediaItems = await ig.feed.timeline().items() as typeof mediaItems;
       }
     }
 
