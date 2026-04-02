@@ -46,6 +46,29 @@ export function isHardBounce(err: unknown): boolean {
   );
 }
 
+export function getSmtpDebugInfo(): Record<string, string> {
+  return {
+    MAILU_SMTP_HOST: HOST || "(missing)",
+    MAILU_SMTP_PORT: String(PORT),
+    MAILU_SMTP_SECURE: String(SECURE),
+    MAILU_SMTP_USER: USER || "(missing)",
+    MAILU_SMTP_PASS: PASS ? `(set, ${PASS.length} chars)` : "(missing)",
+    MAILU_FROM_EMAIL: FROM_EMAIL || "(missing)",
+    MAILU_FROM_NAME: FROM_NAME || "(not set)",
+  };
+}
+
+export async function verifySmtpConnection(): Promise<void> {
+  if (!isMailuConfigured()) {
+    const missing = ["MAILU_SMTP_HOST", "MAILU_SMTP_USER", "MAILU_SMTP_PASS", "MAILU_FROM_EMAIL"]
+      .filter((k) => !process.env[k])
+      .join(", ");
+    throw new Error(`Mailu SMTP not configured. Missing: ${missing}`);
+  }
+  const transport = createTransport();
+  await transport.verify();
+}
+
 export async function sendViaMail(opts: {
   to: string;
   subject: string;
@@ -53,9 +76,10 @@ export async function sendViaMail(opts: {
   contentType?: "text/plain" | "text/html";
 }): Promise<{ messageId: string | null }> {
   if (!isMailuConfigured()) {
-    throw new Error(
-      "Mailu SMTP not configured. Set MAILU_SMTP_HOST, MAILU_SMTP_USER, MAILU_SMTP_PASS, MAILU_FROM_EMAIL."
-    );
+    const missing = ["MAILU_SMTP_HOST", "MAILU_SMTP_USER", "MAILU_SMTP_PASS", "MAILU_FROM_EMAIL"]
+      .filter((k) => !process.env[k])
+      .join(", ");
+    throw new Error(`Mailu SMTP not configured. Missing env vars: ${missing}`);
   }
 
   const transport = createTransport();
