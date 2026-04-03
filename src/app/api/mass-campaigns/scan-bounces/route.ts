@@ -8,9 +8,8 @@ export const maxDuration = 120;
 
 function createOAuthClient() {
   return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    process.env.MASS_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
+    process.env.MASS_GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET
   );
 }
 
