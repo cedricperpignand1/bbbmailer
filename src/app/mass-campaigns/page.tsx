@@ -417,6 +417,7 @@ export default function MassCampaignsPage() {
 
   // Test send
   const [testTo, setTestTo] = useState("");
+  const [testFromAccountId, setTestFromAccountId] = useState<number | "">("");
   const [testSending, setTestSending] = useState(false);
 
   // URL param: ?connected=email
@@ -532,7 +533,7 @@ export default function MassCampaignsPage() {
       const res = await fetch(`/api/mass-campaigns/${campaign.id}/test-send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: testTo }),
+        body: JSON.stringify({ to: testTo, fromAccountId: testFromAccountId || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Test failed");
@@ -817,9 +818,19 @@ export default function MassCampaignsPage() {
       {campaign && (
         <Section title="Test Send">
           <p className="mb-3 text-xs text-slate-500">
-            Sends one email via the first active account. No DB records written.
+            Sends one email via the selected account. No DB records written.
           </p>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
+            <select
+              value={testFromAccountId}
+              onChange={(e) => setTestFromAccountId(e.target.value ? Number(e.target.value) : "")}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
+            >
+              <option value="">— pick sending account —</option>
+              {gmailAccounts.filter((a) => a.connected).map((a) => (
+                <option key={a.id} value={a.id}>{a.label || a.email}</option>
+              ))}
+            </select>
             <Input
               type="email"
               placeholder="recipient@example.com"
@@ -827,7 +838,7 @@ export default function MassCampaignsPage() {
               onChange={(e) => setTestTo(e.target.value)}
               className="max-w-xs"
             />
-            <Btn onClick={sendTestEmail} loading={testSending} disabled={!testTo}>
+            <Btn onClick={sendTestEmail} loading={testSending} disabled={!testTo || !testFromAccountId}>
               Send test
             </Btn>
           </div>

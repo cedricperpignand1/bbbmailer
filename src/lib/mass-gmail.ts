@@ -130,6 +130,17 @@ export async function sendViaMassGmail(opts: SendOpts): Promise<SendResult> {
   return _sendWithAccount(senderEmail, account.refreshToken, opts);
 }
 
+/**
+ * Send via a specific GmailAccount by id.
+ */
+export async function sendViaMassGmailById(accountId: number, opts: SendOpts): Promise<SendResult> {
+  const account = await prisma.gmailAccount.findUnique({ where: { id: accountId } });
+  if (!account?.refreshToken) {
+    throw new Error(`Gmail account #${accountId} not connected.`);
+  }
+  return _sendWithAccount(account.email, account.refreshToken, opts);
+}
+
 async function _sendWithAccount(
   fromEmail: string,
   refreshToken: string,

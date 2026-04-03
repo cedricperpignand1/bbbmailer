@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendViaMassGmail } from "@/lib/mass-gmail";
+import { sendViaMassGmail, sendViaMassGmailById } from "@/lib/mass-gmail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +28,7 @@ export async function POST(
   const body = await req.json().catch(() => null);
   const to = String(body?.to || "").trim();
   const firstName = String(body?.firstName || "there").trim();
+  const fromAccountId = body?.fromAccountId ? Number(body.fromAccountId) : null;
 
   if (!to || !to.includes("@")) {
     return NextResponse.json({ error: "Valid email required" }, { status: 400 });
@@ -63,7 +64,9 @@ export async function POST(
   const bodyText = renderTemplate(tmplBody, vars);
 
   try {
-    const result = await sendViaMassGmail({ to, subject, body: bodyText, contentType });
+    const result = fromAccountId
+      ? await sendViaMassGmailById(fromAccountId, { to, subject, body: bodyText, contentType })
+      : await sendViaMassGmail({ to, subject, body: bodyText, contentType });
     return NextResponse.json({ ok: true, messageId: result.messageId, subject, projectUsed: project, to });
   } catch (e: any) {
     return NextResponse.json({ error: String(e?.message || e || "Gmail send failed") }, { status: 500 });
