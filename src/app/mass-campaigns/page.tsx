@@ -664,10 +664,10 @@ export default function MassCampaignsPage() {
               <Pill tone="neutral">Not in pool</Pill>
             </div>
             <div className="flex gap-2">
-              <Btn variant="secondary" onClick={() => patchAccount(acc.id, { usedForMass: true })}>
+              <Btn variant="secondary" onClick={() => patchAccount(acc.id, { usedForMass: true }).then(() => showToast(`${acc.email} added to pool`)).catch((e) => showToast("Error: " + e.message))}>
                 Add to pool
               </Btn>
-              <Btn variant="ghost" onClick={() => disconnectAccount(acc.id, acc.email)}>
+              <Btn variant="ghost" onClick={() => disconnectAccount(acc.id, acc.email).catch((e) => showToast("Error: " + e.message))}>
                 Remove
               </Btn>
             </div>
