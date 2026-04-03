@@ -224,7 +224,9 @@ export async function POST(req: Request) {
     const accountResults: object[] = [];
 
     for (const gmailAccount of gmailAccounts) {
-      const { limit: dailyLimit, warmupDay } = getAccountDailyLimit(gmailAccount);
+      const { limit: accountLimit, warmupDay } = getAccountDailyLimit(gmailAccount);
+      // Campaign maxPerDay acts as a cap per account — take the lower of the two
+      const dailyLimit = Math.min(accountLimit, campaign.maxPerDay);
 
       // How many has this account already sent today for this campaign?
       const existingAccountRun = await prisma.massCampaignAccountDailyRun.findFirst({
