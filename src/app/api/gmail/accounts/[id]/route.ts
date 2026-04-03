@@ -7,9 +7,10 @@ export const dynamic = "force-dynamic";
 /** PATCH /api/gmail/accounts/[id] — update label, usedForMass, maxPerDay, warmup settings */
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = Number(params.id);
+  const { id: idStr } = await params;
+  const id = Number(idStr);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
   const body = await req.json().catch(() => null);
@@ -73,9 +74,10 @@ export async function PATCH(
 /** DELETE /api/gmail/accounts/[id] — disconnect (clear token) or fully remove */
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = Number(params.id);
+  const { id: idStr } = await params;
+  const id = Number(idStr);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
   const url = new URL(req.url);
