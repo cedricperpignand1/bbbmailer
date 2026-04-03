@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendViaGmailAccountById } from "@/lib/mass-gmail";
+import { scanBouncesForPoolAccounts } from "@/lib/mass-bounce-scan";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -249,9 +250,9 @@ export async function POST(req: Request) {
       const remaining = dailyLimit - accountSentToday;
       const batchLimit = Math.min(BATCH_SIZE_PER_ACCOUNT, remaining);
 
-      // Fetch contacts already sent for this campaign (by any account, ever)
+      // Fetch contacts already sent in the current cycle (by any account)
       const sentRows = await prisma.massCampaignSend.findMany({
-        where: { campaignId: campaign.id },
+        where: { campaignId: campaign.id, cycleNumber: campaign.cycleNumber },
         select: { contactId: true },
       });
       const sentIds = sentRows.map((r) => r.contactId);
@@ -271,7 +272,7 @@ export async function POST(req: Request) {
           accountId: gmailAccount.id,
           email: gmailAccount.email,
           sent: 0,
-          reason: "No unsent contacts remaining",
+          reason: "No unsent contacts remaining in current cycle",
         });
         continue;
       }
@@ -300,6 +301,7 @@ export async function POST(req: Request) {
               campaignId: campaign.id,
               contactId: contact.id,
               gmailAccountId: gmailAccount.id,
+              cycleNumber: campaign.cycleNumber,
               status: "SENT",
               sentAt: new Date(),
               projectUsed: project,
@@ -313,11 +315,12 @@ export async function POST(req: Request) {
 
           // Use upsert to handle the unique constraint gracefully
           await prisma.massCampaignSend.upsert({
-            where: { campaignId_contactId: { campaignId: campaign.id, contactId: contact.id } },
+            where: { campaignId_contactId_cycleNumber: { campaignId: campaign.id, contactId: contact.id, cycleNumber: campaign.cycleNumber } },
             create: {
               campaignId: campaign.id,
               contactId: contact.id,
               gmailAccountId: gmailAccount.id,
+              cycleNumber: campaign.cycleNumber,
               status: "FAILED",
               projectUsed: project,
               error: errMsg,
@@ -398,12 +401,49 @@ export async function POST(req: Request) {
       },
     });
 
+    // ── Cycle completion check ────────────────────────────────────────────
+    // If every account reported "no unsent contacts", the full list is done.
+    // Scan bounces, then advance to the next cycle so sending restarts.
+    const allDone =
+      accountResults.length > 0 &&
+      (accountResults as any[]).every((r) => r.sent === 0 || r.reason?.includes("cycle"));
+
+    // More reliable: check directly if any unsent contacts remain for this cycle
+    const sentCountThisCycle = await prisma.massCampaignSend.count({
+      where: { campaignId: campaign.id, cycleNumber: campaign.cycleNumber },
+    });
+    const totalContactCount = campaign.categoryId
+      ? await prisma.contact.count({
+          where: { categoryId: campaign.categoryId, status: "active" },
+        })
+      : 0;
+
+    let bounceResult = null;
+    let cycleAdvanced = false;
+
+    if (totalContactCount > 0 && sentCountThisCycle >= totalContactCount) {
+      // Full list completed — scan bounces first
+      try {
+        bounceResult = await scanBouncesForPoolAccounts();
+      } catch { /* non-fatal */ }
+
+      // Advance cycle number
+      await prisma.massCampaign.update({
+        where: { id: campaign.id },
+        data: { cycleNumber: { increment: 1 }, lastCycleDoneAt: new Date() },
+      });
+      cycleAdvanced = true;
+    }
+
     campaignResults.push({
       campaignId: campaign.id,
       accounts: accountResults,
       totalSent,
       totalFailed,
       dateET,
+      cycleNumber: campaign.cycleNumber,
+      cycleAdvanced,
+      bounceResult,
     });
   }
 

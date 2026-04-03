@@ -245,6 +245,9 @@ model MassCampaign {
   sendHourET   Int @default(11)
   sendMinuteET Int @default(0)
 
+  cycleNumber     Int @default(1)  // increments each time the full list is completed
+  lastCycleDoneAt DateTime?        // when the last cycle finished (bounce scan trigger)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -268,6 +271,7 @@ model MassCampaignSend {
   gmailAccountId Int?
   gmailAccount   GmailAccount? @relation(fields: [gmailAccountId], references: [id])
 
+  cycleNumber    Int       @default(1)
   status         String    // SENT | FAILED
   sentAt         DateTime?
   projectUsed    String    @default("")
@@ -275,8 +279,9 @@ model MassCampaignSend {
   error          String?
   createdAt      DateTime  @default(now())
 
-  @@unique([campaignId, contactId])
+  @@unique([campaignId, contactId, cycleNumber])
   @@index([campaignId, status])
+  @@index([campaignId, cycleNumber])
   @@index([gmailAccountId])
 }
 
