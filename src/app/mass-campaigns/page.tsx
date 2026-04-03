@@ -424,6 +424,10 @@ export default function MassCampaignsPage() {
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<string | null>(null);
 
+  // Scan bounces
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<string | null>(null);
+
   // URL param: ?connected=email
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -538,6 +542,24 @@ export default function MassCampaignsPage() {
       setRunResult("Error: " + e.message);
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function scanBounces() {
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const res = await fetch("/api/mass-campaigns/scan-bounces", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Scan failed");
+      const parts = (data.accounts ?? []).map((a: any) =>
+        `${a.email}: ${a.scanned} scanned, ${a.bounced} bounces${a.error ? ` (${a.error})` : ""}`
+      );
+      setScanResult(`Marked ${data.contactsMarked} contact(s) as bounced. ${parts.join(" | ")}`);
+    } catch (e: any) {
+      setScanResult("Error: " + e.message);
+    } finally {
+      setScanning(false);
     }
   }
 
@@ -830,6 +852,9 @@ export default function MassCampaignsPage() {
               <Btn variant="primary" onClick={runNow} loading={running}>
                 {running ? "Sending…" : "Run now"}
               </Btn>
+              <Btn variant="secondary" onClick={scanBounces} loading={scanning}>
+                {scanning ? "Scanning…" : "Scan bounces"}
+              </Btn>
               <Btn variant="danger" onClick={resetCampaign} loading={resetting}>
                 Reset history
               </Btn>
@@ -845,6 +870,11 @@ export default function MassCampaignsPage() {
           {runResult && (
             <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
               {runResult}
+            </div>
+          )}
+          {scanResult && (
+            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
+              {scanResult}
             </div>
           )}
         </div>

@@ -4,16 +4,13 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
-
-const SENDER_EMAIL =
-  process.env.MASS_GMAIL_SENDER_EMAIL || "projects@mkbuildersbidbook.com";
+export const maxDuration = 120;
 
 function createOAuthClient() {
   return new google.auth.OAuth2(
-    process.env.MASS_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
-    process.env.MASS_GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET,
-    process.env.MASS_GOOGLE_REDIRECT_URI
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
   );
 }
 
@@ -23,15 +20,15 @@ function allMatches(text: string): string[] {
   return [...text.matchAll(EMAIL_RE)].map((m) => m[0].toLowerCase());
 }
 
-/** Extract bounced email addresses from a Gmail message (full object with payload) */
-function extractBouncedEmails(message: any): string[] {
+function extractBouncedEmails(message: any, senderEmail: string): string[] {
   const emails = new Set<string>();
   const payload = message?.payload;
   if (!payload) return [];
+  const senderLower = senderEmail.toLowerCase();
 
   function addEmail(addr: string) {
     const clean = addr.trim().toLowerCase();
-    if (clean.includes("@")) emails.add(clean);
+    if (clean.includes("@") && clean !== senderLower) emails.add(clean);
   }
 
   function scanHeaders(headers: any[]) {
@@ -39,11 +36,9 @@ function extractBouncedEmails(message: any): string[] {
     for (const h of headers) {
       const name = h.name?.toLowerCase() ?? "";
       const val: string = h.value ?? "";
-      // Direct bounce recipient headers
       if (name === "x-failed-recipients" || name === "x-original-to") {
         for (const e of allMatches(val)) addEmail(e);
       }
-      // "To:" inside embedded original message (message/rfc822 part)
       if (name === "to" || name === "delivered-to") {
         for (const e of allMatches(val)) addEmail(e);
       }
@@ -51,12 +46,9 @@ function extractBouncedEmails(message: any): string[] {
   }
 
   function scanText(text: string) {
-    // Final-Recipient / Original-Recipient DSN fields
     for (const m of text.matchAll(
       /(?:Final|Original)-Recipient:\s*rfc822;\s*([\w.+%-]+@[\w.-]+\.[a-z]{2,})/gi
     )) addEmail(m[1]);
-
-    // Prose bounce messages: "following address(es) failed", "undeliverable", etc.
     for (const m of text.matchAll(
       /(?:address(?:es)? failed|undeliverable to|delivery (?:has )?failed|could not be delivered to)[\s\S]{0,300}?([\w.+%-]+@[\w.-]+\.[a-z]{2,})/gi
     )) addEmail(m[1]);
@@ -65,11 +57,7 @@ function extractBouncedEmails(message: any): string[] {
   function scanPart(part: any, isEmbeddedOriginal = false) {
     if (!part) return;
     const mime: string = part.mimeType ?? "";
-
     scanHeaders(part.headers);
-
-    // Only extract "To:" addresses when we are inside the embedded original
-    // message (message/rfc822) — not from the outer bounce wrapper
     if (isEmbeddedOriginal && part.headers) {
       for (const h of part.headers) {
         if (h.name?.toLowerCase() === "to") {
@@ -77,7 +65,6 @@ function extractBouncedEmails(message: any): string[] {
         }
       }
     }
-
     if (part.body?.data) {
       try {
         const text = Buffer.from(part.body.data, "base64url").toString("utf-8");
@@ -89,7 +76,6 @@ function extractBouncedEmails(message: any): string[] {
         } catch { /* ignore */ }
       }
     }
-
     if (part.parts) {
       for (const child of part.parts) {
         scanPart(child, isEmbeddedOriginal || mime === "message/rfc822");
@@ -97,11 +83,9 @@ function extractBouncedEmails(message: any): string[] {
     }
   }
 
-  // Check top-level message headers first (most reliable for X-Failed-Recipients)
   scanHeaders(payload.headers);
   scanPart(payload);
 
-  // Also scan the raw snippet Gmail provides — often contains the bounced address
   if (message.snippet) {
     for (const m of message.snippet.matchAll(
       /(?:to|for|address)[\s:]+<?([\w.+%-]+@[\w.-]+\.[a-z]{2,})>?/gi
@@ -111,105 +95,87 @@ function extractBouncedEmails(message: any): string[] {
   return [...emails];
 }
 
+async function scanOneAccount(
+  email: string,
+  refreshToken: string
+): Promise<{ scanned: number; bounced: string[]; error?: string }> {
+  const client = createOAuthClient();
+  client.setCredentials({ refresh_token: refreshToken });
+  const gmail = google.gmail({ version: "v1", auth: client });
+
+  let listRes;
+  try {
+    listRes = await gmail.users.messages.list({
+      userId: "me",
+      q: "from:(mailer-daemon OR postmaster) newer_than:30d",
+      maxResults: 100,
+    });
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    if (
+      msg.includes("insufficient") ||
+      msg.includes("scope") ||
+      msg.includes("forbidden") ||
+      e?.status === 403
+    ) {
+      return { scanned: 0, bounced: [], error: `${email}: needs read permission — re-connect.` };
+    }
+    return { scanned: 0, bounced: [], error: `${email}: ${msg}` };
+  }
+
+  const messages = listRes.data.messages ?? [];
+  const bounced: string[] = [];
+
+  for (const msg of messages) {
+    try {
+      const full = await gmail.users.messages.get({ userId: "me", id: msg.id!, format: "full" });
+      bounced.push(...extractBouncedEmails(full.data, email));
+    } catch { /* skip unreadable */ }
+  }
+
+  return { scanned: messages.length, bounced };
+}
+
 export async function POST() {
   try {
-    const account = await prisma.gmailAccount.findUnique({
-      where: { email: SENDER_EMAIL },
+    const accounts = await prisma.gmailAccount.findMany({
+      where: { usedForMass: true },
     });
 
-    if (!account?.refreshToken) {
-      return NextResponse.json(
-        { error: `Gmail not connected for ${SENDER_EMAIL}` },
-        { status: 400 }
-      );
+    if (accounts.length === 0) {
+      return NextResponse.json({ error: "No accounts in sending pool" }, { status: 400 });
     }
 
-    const client = createOAuthClient();
-    client.setCredentials({ refresh_token: account.refreshToken });
-    const gmail = google.gmail({ version: "v1", auth: client });
+    const allBounced = new Set<string>();
+    const accountSummary: { email: string; scanned: number; bounced: number; error?: string }[] = [];
 
-    // Search inbox for bounce-back messages from the last 30 days
-    const query = "from:(mailer-daemon OR postmaster) newer_than:30d";
-
-    let listRes;
-    try {
-      listRes = await gmail.users.messages.list({
-        userId: "me",
-        q: query,
-        maxResults: 100,
-      });
-    } catch (e: any) {
-      const msg = String(e?.message || e);
-      if (msg.includes("insufficient") || msg.includes("scope") || msg.includes("forbidden") || e?.status === 403) {
-        return NextResponse.json(
-          { error: "Gmail account needs read permission. Click Re-connect on this page to re-authorize with the required scope, then try again." },
-          { status: 400 }
-        );
+    for (const account of accounts) {
+      if (!account.refreshToken) {
+        accountSummary.push({ email: account.email, scanned: 0, bounced: 0, error: "Not connected" });
+        continue;
       }
-      throw e;
+      const { scanned, bounced, error } = await scanOneAccount(account.email, account.refreshToken);
+      for (const e of bounced) allBounced.add(e);
+      accountSummary.push({ email: account.email, scanned, bounced: bounced.length, error });
     }
 
-    const messages = listRes.data.messages ?? [];
-    if (messages.length === 0) {
-      return NextResponse.json({ ok: true, bouncesFound: 0, contactsMarked: 0 });
-    }
-
-    const bouncedEmails = new Set<string>();
-    const debugMessages: { id: string; subject: string; snippet: string; extracted: string[] }[] = [];
-    const SENDER_LOWER = SENDER_EMAIL.toLowerCase();
-
-    for (const msg of messages) {
-      try {
-        const full = await gmail.users.messages.get({
-          userId: "me",
-          id: msg.id!,
-          format: "full",
-        });
-        const found = extractBouncedEmails(full.data).filter((e) => e !== SENDER_LOWER);
-        for (const e of found) bouncedEmails.add(e);
-
-        const subject = full.data.payload?.headers?.find(
-          (h: any) => h.name?.toLowerCase() === "subject"
-        )?.value ?? "(no subject)";
-        debugMessages.push({
-          id: msg.id!,
-          subject,
-          snippet: full.data.snippet ?? "",
-          extracted: found,
-        });
-      } catch {
-        // skip unreadable messages
-      }
-    }
-
-    if (bouncedEmails.size === 0) {
-      return NextResponse.json({
-        ok: true,
-        bouncesFound: messages.length,
-        contactsMarked: 0,
-        extractedEmails: [],
-        debugMessages,
+    let contactsMarked = 0;
+    if (allBounced.size > 0) {
+      const result = await prisma.contact.updateMany({
+        where: { email: { in: [...allBounced] }, status: "active" },
+        data: { status: "bounced" },
       });
+      contactsMarked = result.count;
     }
-
-    // Mark all matching contacts as bounced across all categories
-    const result = await prisma.contact.updateMany({
-      where: {
-        email: { in: [...bouncedEmails] },
-        status: "active",
-      },
-      data: { status: "bounced" },
-    });
 
     return NextResponse.json({
       ok: true,
-      bouncesFound: messages.length,
-      extractedEmails: [...bouncedEmails],
-      contactsMarked: result.count,
-      debugMessages,
+      accounts: accountSummary,
+      totalBouncesFound: allBounced.size,
+      contactsMarked,
+      bouncedEmails: [...allBounced],
     });
   } catch (e: any) {
-    const msg = String(e?.message || e || "Unknown error");
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
   }
 }
