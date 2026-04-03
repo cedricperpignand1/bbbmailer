@@ -420,6 +420,10 @@ export default function MassCampaignsPage() {
   const [testFromAccountId, setTestFromAccountId] = useState<number | "">("");
   const [testSending, setTestSending] = useState(false);
 
+  // Manual run
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<string | null>(null);
+
   // URL param: ?connected=email
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -510,6 +514,30 @@ export default function MassCampaignsPage() {
       await loadData();
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function runNow() {
+    setRunning(true);
+    setRunResult(null);
+    try {
+      const res = await fetch("/api/mass-campaigns/run-due?force=1", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Run failed");
+      const campaigns = data.campaigns ?? [];
+      if (campaigns.length === 0) {
+        setRunResult("No active campaigns.");
+      } else {
+        const summary = campaigns.map((c: any) =>
+          c.skipped ? `Skipped: ${c.reason}` : `Sent ${c.totalSent ?? 0} emails`
+        ).join(" | ");
+        setRunResult(summary);
+      }
+      await loadData();
+    } catch (e: any) {
+      setRunResult("Error: " + e.message);
+    } finally {
+      setRunning(false);
     }
   }
 
@@ -799,6 +827,9 @@ export default function MassCampaignsPage() {
               >
                 {campaign.active ? "Pause" : "Activate"}
               </Btn>
+              <Btn variant="primary" onClick={runNow} loading={running}>
+                {running ? "Sending…" : "Run now"}
+              </Btn>
               <Btn variant="danger" onClick={resetCampaign} loading={resetting}>
                 Reset history
               </Btn>
@@ -809,6 +840,11 @@ export default function MassCampaignsPage() {
               <Pill tone={campaign.active ? "green" : "neutral"}>
                 {campaign.active ? "Active" : "Paused"}
               </Pill>
+            </div>
+          )}
+          {runResult && (
+            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
+              {runResult}
             </div>
           )}
         </div>
