@@ -427,6 +427,11 @@ export async function POST(req: Request) {
         bounceResult = await scanBouncesForPoolAccounts();
       } catch { /* non-fatal */ }
 
+      // Delete completed cycle's send records to keep DB clean
+      await prisma.massCampaignSend.deleteMany({
+        where: { campaignId: campaign.id, cycleNumber: campaign.cycleNumber },
+      });
+
       // Advance cycle number
       await prisma.massCampaign.update({
         where: { id: campaign.id },
