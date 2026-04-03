@@ -56,7 +56,8 @@ export default function TopNav() {
     <nav className="hidden md:flex items-center gap-1 rounded-2xl bg-white/10 p-1 border border-white/10">
       <NavLink href="/categories" label="Contacts" />
       <NavLink href="/templates" label="Templates" />
-      <NavLink href="/campaigns" label="Mass Campaigns" />
+      <NavLink href="/campaigns" label="Campaigns" />
+      <NavLink href="/mass-campaigns" label="Mass Gmail" highlight />
       <NavLink href="/auto-campaigns" label="Auto Campaigns" />
       <NavLink href="/mailu-mass" label="Mailu Mass" />
       <NavLink href="/auto-sms" label="Auto SMS" highlight />
