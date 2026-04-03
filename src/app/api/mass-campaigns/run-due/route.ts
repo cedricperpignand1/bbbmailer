@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendViaMassGmail } from "@/lib/mass-gmail";
+import { sendViaGmailAccountById } from "@/lib/mass-gmail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const BATCH_SIZE = 12; // emails per cron run — safe within 300s limit
+/**
+ * Batch size per account per cron tick.
+ * With ~3–8s pacing and 3 accounts × 12 = 36 emails, fits well within 300s.
+ */
+const BATCH_SIZE_PER_ACCOUNT = 12;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function getETParts(now = new Date()) {
   const dtf = new Intl.DateTimeFormat("en-US", {
@@ -64,15 +70,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Returns true if the Gmail API error indicates a permanent address failure
- * (hard bounce / invalid recipient). These contacts are safe to mark as bounced.
- * Does NOT match auth errors, rate limits, or transient failures.
- */
+function humanDelay(): number {
+  const r = Math.random();
+  if (r < 0.05) return 15000 + Math.random() * 15000; // 5%  → 15–30s
+  if (r < 0.20) return 8000 + Math.random() * 7000;   // 15% → 8–15s
+  return 3000 + Math.random() * 5000;                  // 80% → 3–8s
+}
+
 function isHardBounce(errMsg: string): boolean {
   const lower = errMsg.toLowerCase();
   return (
-    /\b55[0-9]\b/.test(errMsg) ||            // SMTP 550–559 permanent failures
+    /\b55[0-9]\b/.test(errMsg) ||
     lower.includes("no such user") ||
     lower.includes("user does not exist") ||
     lower.includes("user unknown") ||
@@ -82,19 +90,38 @@ function isHardBounce(errMsg: string): boolean {
     lower.includes("recipient address rejected") ||
     lower.includes("does not exist") ||
     lower.includes("undeliverable") ||
-    /5\.\d\.\d/.test(errMsg)                 // SMTP enhanced codes 5.x.x
+    /5\.\d\.\d/.test(errMsg)
   );
 }
 
-/** Randomised human-like delay between sends — kept short to fit within 300s maxDuration */
-function humanDelay(): number {
-  const r = Math.random();
-  if (r < 0.05) return 15000 + Math.random() * 15000; // 5 %  → 15–30 s
-  if (r < 0.20) return 8000 + Math.random() * 7000;   // 15 % →  8–15 s
-  return 3000 + Math.random() * 5000;                  // 80 % →  3–8 s
+/**
+ * Returns the effective daily limit for an account based on its warmup schedule.
+ */
+function getAccountDailyLimit(account: {
+  maxPerDay: number;
+  warmupEnabled: boolean;
+  warmupStartDate: Date | null;
+  warmupSchedule: string;
+}): { limit: number; warmupDay: number } {
+  if (!account.warmupEnabled || !account.warmupStartDate) {
+    return { limit: account.maxPerDay, warmupDay: 0 };
+  }
+
+  const schedule = account.warmupSchedule
+    .split(",")
+    .map(Number)
+    .filter((n) => n > 0);
+
+  const msSinceStart = Date.now() - account.warmupStartDate.getTime();
+  const warmupDay = Math.floor(msSinceStart / (1000 * 60 * 60 * 24)) + 1;
+  const limit =
+    warmupDay <= schedule.length ? schedule[warmupDay - 1] : account.maxPerDay;
+
+  return { limit, warmupDay };
 }
 
-// Vercel cron sends GET — delegate to the same handler
+// ── Route handlers ────────────────────────────────────────────────────────────
+
 export async function GET(req: Request) {
   return POST(req);
 }
@@ -103,7 +130,6 @@ export async function POST(req: Request) {
   const url = new URL(req.url);
   const force = url.searchParams.get("force") === "1";
 
-  // Auth: only block if a key is configured AND a wrong key is explicitly provided
   const key = url.searchParams.get("key") || "";
   const expected = process.env.AUTO_CRON_KEY || "";
   if (expected && key && key !== expected) {
@@ -113,24 +139,43 @@ export async function POST(req: Request) {
   const et = getETParts();
 
   if (!force && !isWeekday(et.weekday)) {
-    return NextResponse.json({ ok: true, skipped: true, reason: "Weekend — weekdays only", weekday: et.weekday });
+    return NextResponse.json({
+      ok: true, skipped: true, reason: "Weekend — weekdays only", weekday: et.weekday,
+    });
   }
 
   const dateET = etDateString(et);
+
+  // Load the active mass campaign (single campaign design)
   const campaigns = await prisma.massCampaign.findMany({ where: { active: true } });
 
   if (campaigns.length === 0) {
     return NextResponse.json({ ok: true, skipped: true, reason: "No active campaigns", dateET });
   }
 
-  const results: object[] = [];
+  // Load all Gmail accounts in the mass-send pool
+  const gmailAccounts = await prisma.gmailAccount.findMany({
+    where: { usedForMass: true },
+    orderBy: { id: "asc" },
+  });
+
+  if (gmailAccounts.length === 0) {
+    return NextResponse.json({
+      ok: true, skipped: true,
+      reason: "No Gmail accounts configured for mass sending. Go to /mass-campaigns and enable accounts.",
+      dateET,
+    });
+  }
+
+  const campaignResults: object[] = [];
 
   for (const campaign of campaigns) {
+    // ── Time check ────────────────────────────────────────────────────────
     if (!force) {
       const nowMin = et.hour * 60 + et.minute;
       const targetMin = campaign.sendHourET * 60 + campaign.sendMinuteET;
       if (nowMin < targetMin) {
-        results.push({
+        campaignResults.push({
           campaignId: campaign.id,
           skipped: true,
           reason: `Too early — scheduled for ${String(campaign.sendHourET).padStart(2, "0")}:${String(campaign.sendMinuteET).padStart(2, "0")} ET`,
@@ -139,18 +184,12 @@ export async function POST(req: Request) {
       }
     }
 
-    // Check how many have already been sent today
-    const existingRun = await prisma.massCampaignDailyRun.findFirst({
-      where: { campaignId: campaign.id, dateET },
-    });
-    const sentToday = existingRun ? existingRun.sentCount : 0;
-
-    if (sentToday >= campaign.maxPerDay) {
-      results.push({ campaignId: campaign.id, skipped: true, reason: `Daily limit reached (${sentToday}/${campaign.maxPerDay})`, dateET });
+    if (!campaign.categoryId) {
+      campaignResults.push({ campaignId: campaign.id, skipped: true, reason: "No contact list configured" });
       continue;
     }
 
-    // Resolve template
+    // ── Template resolution ───────────────────────────────────────────────
     let tmplSubject = campaign.templateSubject;
     let tmplBody = campaign.templateBody;
     let contentType: "text/plain" | "text/html" = "text/plain";
@@ -158,7 +197,7 @@ export async function POST(req: Request) {
     if (campaign.templateId) {
       const dbTemplate = await prisma.template.findUnique({ where: { id: campaign.templateId } });
       if (!dbTemplate) {
-        results.push({ campaignId: campaign.id, skipped: true, reason: `Template #${campaign.templateId} not found` });
+        campaignResults.push({ campaignId: campaign.id, skipped: true, reason: `Template #${campaign.templateId} not found` });
         continue;
       }
       tmplSubject = dbTemplate.subject;
@@ -167,108 +206,204 @@ export async function POST(req: Request) {
     }
 
     if (!tmplSubject && !tmplBody) {
-      results.push({ campaignId: campaign.id, skipped: true, reason: "No template configured" });
-      continue;
-    }
-
-    if (!campaign.categoryId) {
-      results.push({ campaignId: campaign.id, skipped: true, reason: "No contact list configured" });
+      campaignResults.push({ campaignId: campaign.id, skipped: true, reason: "No template configured" });
       continue;
     }
 
     const addresses = parseAddresses(campaign.addressesText);
     if (addresses.length === 0) {
-      results.push({ campaignId: campaign.id, skipped: true, reason: "No property addresses configured" });
+      campaignResults.push({ campaignId: campaign.id, skipped: true, reason: "No property addresses configured" });
       continue;
     }
 
-    // Fetch unsent contacts — only up to the remaining daily quota, capped at BATCH_SIZE
-    const remaining = campaign.maxPerDay - sentToday;
-    const batchLimit = Math.min(BATCH_SIZE, remaining);
+    // ── Per-account sequential sending ───────────────────────────────────
+    // Process each account one-by-one to avoid duplicate contact assignment.
+    // Each account claims its slice of unsent contacts after the previous
+    // account's sends are committed to the DB.
 
-    const sentRows = await prisma.massCampaignSend.findMany({
-      where: { campaignId: campaign.id },
-      select: { contactId: true },
-    });
-    const sentIds = sentRows.map((r) => r.contactId);
+    const accountResults: object[] = [];
 
-    const contacts = await prisma.contact.findMany({
-      where: {
-        categoryId: campaign.categoryId,
-        status: "active",
-        ...(sentIds.length > 0 ? { id: { notIn: sentIds } } : {}),
-      },
-      orderBy: { id: "asc" },
-      take: batchLimit,
-    });
+    for (const gmailAccount of gmailAccounts) {
+      const { limit: dailyLimit, warmupDay } = getAccountDailyLimit(gmailAccount);
 
-    if (contacts.length === 0) {
-      results.push({ campaignId: campaign.id, skipped: true, reason: "No unsent contacts remaining", sentToday, dateET });
-      continue;
-    }
+      // How many has this account already sent today for this campaign?
+      const existingAccountRun = await prisma.massCampaignAccountDailyRun.findFirst({
+        where: { campaignId: campaign.id, gmailAccountId: gmailAccount.id, dateET },
+      });
+      const accountSentToday = existingAccountRun?.sentCount ?? 0;
 
-    let sent = 0;
-    let failed = 0;
-
-    for (let i = 0; i < contacts.length; i++) {
-      const contact = contacts[i];
-      const project = pickRandom(addresses);
-      const firstName = contact.firstName || "there";
-      const vars = { firstName, project, address: project };
-      const subject = renderTemplate(tmplSubject, vars);
-      const body = renderTemplate(tmplBody, vars);
-
-      try {
-        const gmailResult = await sendViaMassGmail({ to: contact.email, subject, body, contentType });
-        await prisma.massCampaignSend.create({
-          data: {
-            campaignId: campaign.id,
-            contactId: contact.id,
-            status: "SENT",
-            sentAt: new Date(),
-            projectUsed: project,
-            gmailMessageId: gmailResult.messageId ?? null,
-          },
+      if (accountSentToday >= dailyLimit) {
+        accountResults.push({
+          accountId: gmailAccount.id,
+          email: gmailAccount.email,
+          skipped: true,
+          reason: `Daily limit reached (${accountSentToday}/${dailyLimit})`,
+          warmupDay,
+          dailyLimit,
         });
-        sent++;
-      } catch (e: any) {
-        const errMsg = String(e?.message || e || "Unknown error").slice(0, 1000);
-        const bounced = isHardBounce(errMsg);
-        await prisma.massCampaignSend.create({
-          data: {
-            campaignId: campaign.id,
-            contactId: contact.id,
-            status: "FAILED",
-            projectUsed: project,
-            error: errMsg,
-          },
+        continue;
+      }
+
+      const remaining = dailyLimit - accountSentToday;
+      const batchLimit = Math.min(BATCH_SIZE_PER_ACCOUNT, remaining);
+
+      // Fetch contacts already sent for this campaign (by any account, ever)
+      const sentRows = await prisma.massCampaignSend.findMany({
+        where: { campaignId: campaign.id },
+        select: { contactId: true },
+      });
+      const sentIds = sentRows.map((r) => r.contactId);
+
+      const contacts = await prisma.contact.findMany({
+        where: {
+          categoryId: campaign.categoryId,
+          status: "active",
+          ...(sentIds.length > 0 ? { id: { notIn: sentIds } } : {}),
+        },
+        orderBy: { id: "asc" },
+        take: batchLimit,
+      });
+
+      if (contacts.length === 0) {
+        accountResults.push({
+          accountId: gmailAccount.id,
+          email: gmailAccount.email,
+          sent: 0,
+          reason: "No unsent contacts remaining",
         });
-        if (bounced) {
-          await prisma.contact.update({
-            where: { id: contact.id },
-            data: { status: "bounced" },
+        continue;
+      }
+
+      let sent = 0;
+      let failed = 0;
+
+      for (let i = 0; i < contacts.length; i++) {
+        const contact = contacts[i];
+        const project = pickRandom(addresses);
+        const firstName = contact.firstName || "there";
+        const vars = { firstName, project, address: project };
+        const subject = renderTemplate(tmplSubject, vars);
+        const body = renderTemplate(tmplBody, vars);
+
+        try {
+          const gmailResult = await sendViaGmailAccountById(gmailAccount.id, {
+            to: contact.email,
+            subject,
+            body,
+            contentType,
           });
+
+          await prisma.massCampaignSend.create({
+            data: {
+              campaignId: campaign.id,
+              contactId: contact.id,
+              gmailAccountId: gmailAccount.id,
+              status: "SENT",
+              sentAt: new Date(),
+              projectUsed: project,
+              gmailMessageId: gmailResult.messageId ?? null,
+            },
+          });
+          sent++;
+        } catch (e: any) {
+          const errMsg = String(e?.message || e || "Unknown error").slice(0, 1000);
+          const bounced = isHardBounce(errMsg);
+
+          // Use upsert to handle the unique constraint gracefully
+          await prisma.massCampaignSend.upsert({
+            where: { campaignId_contactId: { campaignId: campaign.id, contactId: contact.id } },
+            create: {
+              campaignId: campaign.id,
+              contactId: contact.id,
+              gmailAccountId: gmailAccount.id,
+              status: "FAILED",
+              projectUsed: project,
+              error: errMsg,
+            },
+            update: {
+              status: "FAILED",
+              gmailAccountId: gmailAccount.id,
+              error: errMsg,
+            },
+          });
+
+          if (bounced) {
+            await prisma.contact.update({
+              where: { id: contact.id },
+              data: { status: "bounced" },
+            });
+          }
+          failed++;
         }
-        failed++;
+
+        if (i < contacts.length - 1) {
+          await sleep(humanDelay());
+        }
       }
 
-      if (i < contacts.length - 1) {
-        await sleep(humanDelay());
-      }
+      // Upsert per-account daily run
+      await prisma.massCampaignAccountDailyRun.upsert({
+        where: {
+          campaignId_gmailAccountId_dateET: {
+            campaignId: campaign.id,
+            gmailAccountId: gmailAccount.id,
+            dateET,
+          },
+        },
+        create: {
+          campaignId: campaign.id,
+          gmailAccountId: gmailAccount.id,
+          dateET,
+          sentCount: sent,
+          failedCount: failed,
+          warmupDay,
+          dailyLimit,
+        },
+        update: {
+          sentCount: { increment: sent },
+          failedCount: { increment: failed },
+        },
+      });
+
+      accountResults.push({
+        accountId: gmailAccount.id,
+        email: gmailAccount.email,
+        label: gmailAccount.label,
+        batchSent: sent,
+        batchFailed: failed,
+        sentToday: accountSentToday + sent,
+        dailyLimit,
+        warmupDay,
+      });
     }
 
-    // Upsert daily run — increment counts so each batch accumulates
+    // Upsert overall campaign daily run (sum across all accounts this tick)
+    const totalSent = accountResults.reduce(
+      (sum, r: any) => sum + (r.batchSent ?? 0),
+      0
+    );
+    const totalFailed = accountResults.reduce(
+      (sum, r: any) => sum + (r.batchFailed ?? 0),
+      0
+    );
+
     await prisma.massCampaignDailyRun.upsert({
       where: { campaignId_dateET: { campaignId: campaign.id, dateET } },
-      create: { campaignId: campaign.id, dateET, sentCount: sent, failedCount: failed },
+      create: { campaignId: campaign.id, dateET, sentCount: totalSent, failedCount: totalFailed },
       update: {
-        sentCount: { increment: sent },
-        failedCount: { increment: failed },
+        sentCount: { increment: totalSent },
+        failedCount: { increment: totalFailed },
       },
     });
 
-    results.push({ campaignId: campaign.id, batchSent: sent, batchFailed: failed, sentToday: sentToday + sent, dailyLimit: campaign.maxPerDay, dateET });
+    campaignResults.push({
+      campaignId: campaign.id,
+      accounts: accountResults,
+      totalSent,
+      totalFailed,
+      dateET,
+    });
   }
 
-  return NextResponse.json({ ok: true, dateET, et, results });
+  return NextResponse.json({ ok: true, dateET, et, campaigns: campaignResults });
 }

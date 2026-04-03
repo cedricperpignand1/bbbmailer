@@ -199,13 +199,25 @@ model AutoCampaignDailyRun {
 }
 
 model GmailAccount {
-  id                  Int       @id @default(autoincrement())
-  email               String    @unique
-  refreshToken        String
-  accessToken         String?
+  id                   Int       @id @default(autoincrement())
+  email                String    @unique
+  label                String    @default("") // friendly display name
+  refreshToken         String
+  accessToken          String?
   accessTokenExpiresAt DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+
+  // Mass campaign sending pool
+  usedForMass     Boolean   @default(false)
+  maxPerDay       Int       @default(275)
+  warmupEnabled   Boolean   @default(false)
+  warmupStartDate DateTime?
+  warmupSchedule  String    @default("20,30,45,60,80,100,125,150,180,210,240,275")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  massCampaignSends MassCampaignSend[]
+  accountDailyRuns  MassCampaignAccountDailyRun[]
 }
 
 // ── Mass Campaigns (second Gmail account: projects@mkbuildersbidbook.com) ──────
@@ -236,8 +248,9 @@ model MassCampaign {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  sends     MassCampaignSend[]
-  dailyRuns MassCampaignDailyRun[]
+  sends            MassCampaignSend[]
+  dailyRuns        MassCampaignDailyRun[]
+  accountDailyRuns MassCampaignAccountDailyRun[]
 
   @@index([active])
   @@index([categoryId])
@@ -252,6 +265,9 @@ model MassCampaignSend {
   contactId Int
   contact   Contact @relation(fields: [contactId], references: [id])
 
+  gmailAccountId Int?
+  gmailAccount   GmailAccount? @relation(fields: [gmailAccountId], references: [id])
+
   status         String    // SENT | FAILED
   sentAt         DateTime?
   projectUsed    String    @default("")
@@ -261,6 +277,7 @@ model MassCampaignSend {
 
   @@unique([campaignId, contactId])
   @@index([campaignId, status])
+  @@index([gmailAccountId])
 }
 
 model MassCampaignDailyRun {
@@ -276,6 +293,26 @@ model MassCampaignDailyRun {
 
   @@unique([campaignId, dateET])
   @@index([campaignId])
+}
+
+// Per-account daily stats for multi-account mass sends
+model MassCampaignAccountDailyRun {
+  id Int @id @default(autoincrement())
+
+  campaignId Int
+  campaign   MassCampaign @relation(fields: [campaignId], references: [id])
+
+  gmailAccountId Int
+  gmailAccount   GmailAccount @relation(fields: [gmailAccountId], references: [id])
+
+  dateET      String // YYYY-MM-DD
+  sentCount   Int    @default(0)
+  failedCount Int    @default(0)
+  warmupDay   Int    @default(0)
+  dailyLimit  Int    @default(0)
+
+  @@unique([campaignId, gmailAccountId, dateET])
+  @@index([campaignId, dateET])
 }
 
 model PhoneContact {

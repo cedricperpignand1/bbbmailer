@@ -121,6 +121,12 @@ export default function Home() {
           title="Campaigns"
           description="Queue a phase and send batches safely."
         />
+        <ActionCard
+          href="/mass-campaigns"
+          badge="Multi-account"
+          title="Mass Campaigns"
+          description="Multiple Gmail accounts, shared list, per-account warm-up, no duplicate sends."
+        />
       </div>
 
       {/* Bottom note */}
