@@ -181,6 +181,8 @@ export default function AdsPage() {
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>("overview");
   const [decidingId, setDecidingId] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -198,6 +200,22 @@ export default function AdsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function syncCampaigns() {
+    setSyncing(true);
+    setSyncMsg("");
+    try {
+      const res = await fetch("/api/ads/sync", { method: "POST" });
+      const json = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Sync failed");
+      setSyncMsg("Campaigns synced successfully.");
+      await load();
+    } catch (err) {
+      setSyncMsg(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function decide(id: string, approved: boolean) {
     setDecidingId(id);
@@ -247,12 +265,26 @@ export default function AdsPage() {
           <h1 className="text-2xl font-bold text-slate-800">Google Ads</h1>
           <p className="text-sm text-slate-500">Builder&apos;s Bid Book — Florida Markets</p>
         </div>
-        <button
-          onClick={() => { setLoading(true); void load(); }}
-          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {syncMsg && (
+            <span className={`text-sm ${syncMsg.includes("success") ? "text-emerald-600" : "text-red-500"}`}>
+              {syncMsg}
+            </span>
+          )}
+          <button
+            onClick={() => void syncCampaigns()}
+            disabled={syncing}
+            className="rounded-lg border border-blue-300 bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+          >
+            {syncing ? "Syncing…" : "Sync from Google Ads"}
+          </button>
+          <button
+            onClick={() => { setLoading(true); void load(); }}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
