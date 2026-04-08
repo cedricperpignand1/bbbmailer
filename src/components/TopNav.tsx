@@ -62,6 +62,7 @@ export default function TopNav() {
       <NavLink href="/mailu-mass" label="Mailu Mass" />
       <NavLink href="/auto-sms" label="Auto SMS" highlight />
       <NavLink href="/instagram" label="Instagram" />
+      <NavLink href="/ads" label="Google Ads" highlight />
     </nav>
   );
 }
