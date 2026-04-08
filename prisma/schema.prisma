@@ -552,3 +552,118 @@ model MailuSuppression {
 
   @@index([email])
 }
+
+// ── Google Ads Management ─────────────────────────────────────────────────────
+
+model GadsCampaign {
+  id               String   @id @default(cuid())
+  name             String
+  googleCampaignId String   @unique
+  city             String
+  dailyBudgetCents Int
+  status           String   @default("ENABLED")
+  createdAt        DateTime @default(now())
+
+  adGroups GadsAdGroup[]
+  metrics  GadsCampaignMetrics[]
+}
+
+model GadsAdGroup {
+  id              String       @id @default(cuid())
+  campaignId      String
+  campaign        GadsCampaign @relation(fields: [campaignId], references: [id])
+  name            String
+  googleAdGroupId String       @unique
+  status          String       @default("ENABLED")
+
+  keywords GadsKeyword[]
+}
+
+model GadsKeyword {
+  id        String      @id @default(cuid())
+  adGroupId String
+  adGroup   GadsAdGroup @relation(fields: [adGroupId], references: [id])
+  text      String
+  matchType String
+  bidMicros BigInt
+  status    String      @default("ENABLED")
+}
+
+model GadsAdClick {
+  id                String   @id @default(cuid())
+  gclid             String   @unique
+  ip                String
+  userAgent         String?
+  clickTimestamp    DateTime
+  pageLoadTimestamp DateTime
+  timeDeltaMs       Int
+  hasMouse          Boolean  @default(false)
+  sessionDurationMs Int
+  pagesViewed       Int      @default(1)
+  fraudScore        Int      @default(0)
+  flags             String[] @default([])
+  flagged           Boolean  @default(false)
+  blocked           Boolean  @default(false)
+  city              String?
+  createdAt         DateTime @default(now())
+
+  @@index([ip, createdAt])
+  @@index([createdAt])
+}
+
+model GadsIpBlock {
+  id             String   @id @default(cuid())
+  ip             String   @unique
+  reason         String
+  blockedAt      DateTime @default(now())
+  googleExcluded Boolean  @default(false)
+}
+
+model GadsCampaignMetrics {
+  id            String       @id @default(cuid())
+  campaignId    String
+  campaign      GadsCampaign @relation(fields: [campaignId], references: [id])
+  date          DateTime
+  clicks        Int          @default(0)
+  impressions   Int          @default(0)
+  costMicros    BigInt       @default(0)
+  conversions   Int          @default(0)
+  invalidClicks Int          @default(0)
+  city          String?
+  createdAt     DateTime     @default(now())
+
+  @@unique([campaignId, date])
+  @@index([campaignId, date])
+}
+
+model GadsAiDecision {
+  id               String    @id @default(cuid())
+  type             String
+  reasoning        String
+  action           String
+  confidence       Float
+  requiresApproval Boolean   @default(false)
+  approved         Boolean?
+  executedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([requiresApproval, approved])
+}
+
+model GadsAutomationRule {
+  id          String    @id @default(cuid())
+  name        String
+  condition   String
+  action      String
+  enabled     Boolean   @default(true)
+  lastFiredAt DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model GadsNegativeKeyword {
+  id      String   @id @default(cuid())
+  text    String   @unique
+  addedBy String   @default("manual")
+  addedAt DateTime @default(now())
+}
