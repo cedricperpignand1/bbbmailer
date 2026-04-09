@@ -4,7 +4,8 @@ import fs from 'fs';
 
 const LOGO_PATH = path.join(process.cwd(), 'public', 'bbb-logo.png');
 
-// Font candidates — first found wins
+// Font candidates — first found wins.
+// The Noto Sans entry (last) is bundled inside next itself so it always exists in production.
 const FONT_CANDIDATES = [
   { file: path.join(process.cwd(), 'public', 'fonts', 'inter-bold.ttf'), family: 'BBB' },
   { file: 'C:\\Windows\\Fonts\\arialbd.ttf',   family: 'Arial' },
@@ -14,6 +15,11 @@ const FONT_CANDIDATES = [
   { file: '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf', family: 'Liberation Sans' },
   { file: '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',          family: 'FreeSans' },
   { file: '/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf',                  family: 'DejaVu Sans' },
+  // Always-available fallback — shipped with next/og, works on Vercel and any server
+  {
+    file: path.join(process.cwd(), 'node_modules', 'next', 'dist', 'compiled', '@vercel', 'og', 'noto-sans-v27-latin-regular.ttf'),
+    family: 'NotoSans',
+  },
 ];
 
 let _fontFamily: string | null = null;
@@ -79,6 +85,8 @@ export async function stampAndSaveImage(
   const imgBuf = Buffer.from(await res.arrayBuffer());
 
   const family = initFont();
+  // CSS font string — named families get quoted, generic keywords (sans-serif) must NOT be quoted
+  const fontFamily = family === 'sans-serif' ? 'sans-serif' : `"${family}"`;
   const baseImg = await loadImage(imgBuf);
   const W = baseImg.width  || 1024;
   const H = baseImg.height || 1024;
@@ -105,7 +113,7 @@ export async function stampAndSaveImage(
     const len = text.length;
     const fontSize = len <= 18 ? 86 : len <= 28 ? 72 : len <= 40 ? 60 : 50;
 
-    ctx.font = `bold ${fontSize}px "${family}"`;
+    ctx.font = `bold ${fontSize}px ${fontFamily}`;
     const lines  = wrapText(ctx, text, maxTextW);
     const lineH  = Math.round(fontSize * 1.22);
     const blockH = lines.length * lineH;
@@ -121,7 +129,7 @@ export async function stampAndSaveImage(
     // Text: shadow pass then white
     for (let i = 0; i < lines.length; i++) {
       const y = firstLineY + i * lineH;
-      ctx.font = `bold ${fontSize}px "${family}"`;
+      ctx.font = `bold ${fontSize}px ${fontFamily}`;
       ctx.fillStyle = 'rgba(0,0,0,0.4)';
       ctx.fillText(lines[i], 51, y + 3);
       ctx.fillStyle = 'white';
@@ -129,7 +137,7 @@ export async function stampAndSaveImage(
     }
 
     // URL label
-    ctx.font = `19px "${family}"`;
+    ctx.font = `19px ${fontFamily}`;
     ctx.fillStyle = 'rgba(255,255,255,0.48)';
     ctx.fillText('BUILDERSBIDBOOK.COM', 48, urlY);
   }
