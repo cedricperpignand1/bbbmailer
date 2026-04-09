@@ -124,31 +124,24 @@ GENERATION RULES:
    - Square 1:1 composition with the strongest visual element centered or in the upper 60% (lower 40% will have a text overlay so keep it less busy)
    - NO text, NO logos, NO watermarks in the generated image
 
-   IMPORTANT ABOUT THE BUSINESS: Builders Bid Book is about RESIDENTIAL and small commercial construction — new home builds, townhouses, duplexes, small apartment buildings, additions. NOT skyscrapers. NOT downtown high-rises. Think South Florida neighborhoods, subdivision lots, single-family homes being built, small contractors on job sites.
+   IMPORTANT: BBB is about residential and small commercial construction — permits, new home builds, townhouses, small apartment buildings. NOT skyscrapers.
 
-   CHOOSE ONE of these scene types — pick whichever fits the post angle best:
-   A) FRESH FOUNDATION: Wide shot of a freshly poured concrete slab on a South Florida residential lot, rebar poking up, wooden forms around the perimeter, palm trees and blue sky in background, bright Florida sunshine, professional real estate photography
-   B) WOOD FRAMING: New home wood framing going up in a South Florida neighborhood, 2x4 stud walls and roof trusses taking shape, workers visible from behind in hard hats, clear blue sky above, warm golden hour lighting, editorial construction photography
-   C) EMPTY LOT: A cleared residential building lot in a South Florida neighborhood with a "permit posted" sign, surrounding homes visible, palm trees, lush green grass, bright sunny day, the kind of lot a subcontractor would want to find first
-   D) BLUEPRINT FLAT LAY: Overhead close-up of residential house blueprints and architectural plans spread on a wooden table, yellow hard hat placed on top, measuring tape, pencil, coffee cup — clean and warm studio lighting, professional real estate photography
-   E) CONTRACTOR MOMENT: A contractor or small crew (seen from behind or side — no faces) reviewing plans on a clipboard while standing in front of a residential home under construction, Florida vegetation visible, authentic job site feel, editorial photography style
-   F) CONCRETE BLOCK WALLS: South Florida-style CBS (concrete block) residential construction in progress — block walls going up, rebar columns, blue sky, palm trees, typical Miami-Dade or Broward residential street, bright midday light
-   G) FINISHED NEW BUILD: A brand-new modern residential home just completed in South Florida — clean stucco exterior, impact windows, paver driveway, tropical landscaping, bright sunny day, real estate listing photography quality
-   H) TOOLS AND TRADE: Close-up still life of contractor tools on a job site — worn leather tool belt, measuring tape, hard hat, permit documents spread on plywood — warm natural light, authentic and gritty, professional editorial photography
+   CHOOSE ONE scene — rotate for variety, pick what fits the angle:
+   A) FRESH FOUNDATION: Freshly poured concrete slab on a South Florida residential lot, rebar grid, wooden forms, palm trees and blue sky, bright Florida sunshine
+   B) WOOD FRAMING: New home framing going up in a South Florida neighborhood, stud walls and roof trusses, workers from behind in hard hats, golden hour lighting
+   C) EMPTY LOT: Cleared residential lot in a South Florida neighborhood, palm trees, surrounding homes visible, bright sunny day — the kind of lot a contractor wants to find first
+   D) BLUEPRINT FLAT LAY: Overhead close-up of blueprints on a table, yellow hard hat, measuring tape, pencil — warm studio lighting, clean composition
+   E) CONTRACTOR REVIEWING PLANS: Contractor seen from behind, reviewing plans on clipboard in front of a home under construction, South Florida vegetation
+   F) CBS BLOCK WALLS: Concrete block residential walls going up, rebar columns, blue sky, palm trees, typical Miami-Dade street, bright midday
+   G) FINISHED NEW BUILD: Brand-new modern stucco home, impact windows, paver driveway, tropical landscaping, real estate listing quality photography
+   H) TOOLS FLAT LAY: Tool belt, hard hat, permit documents, measuring tape on plywood — warm authentic editorial photography
+   I) AERIAL NEIGHBORHOOD: Drone view looking down at a South Florida neighborhood — streets, rooftops, yards, a couple homes visibly under construction, shows active development from above
+   J) EXCAVATOR ON LOT: Yellow excavator on a residential South Florida lot clearing land for new construction, palm trees, blue sky, authentic job site energy
+   K) PERMIT SIGN: Close-up of a building permit posted on a stake in front of a South Florida property, bokeh residential street and palm trees in background, golden hour
+   L) CONTRACTOR WITH TABLET: Contractor (from side, no face visible) holding a tablet on a job site looking at data, hard hat on, modern professional feel, South Florida residential street
 
-   Pick ONE scene. Describe it with specific South Florida details (neighborhood feel, tropical vegetation, Florida sky, warm light).
-
-   TYPOGRAPHY OVERLAY — include this in the image:
-   - Add a semi-transparent dark overlay band at the TOP of the image (top 28%)
-   - On that top band, render the HEADLINE in large bold clean white sans-serif uppercase text, left-aligned with padding
-   - The text must be in the TOP PORTION only — the bottom-right corner must stay clear (logo goes there)
-   - Font style: bold, modern, editorial sans-serif — like a magazine cover headline
-   - Text must be ultra-sharp, high resolution, crisp edges — NOT blurry, NOT soft, NOT anti-aliased poorly
-   - No decorative fonts, no scripts — clean conservative bold typography only
-   - The headline will be provided — render it exactly as written, uppercase, white, bold
-   - Do NOT place any text in the bottom half of the image
-
-   End with: "No logos, no watermarks. Text must be razor-sharp, perfectly spelled, crisp and clearly readable at full resolution."
+   Pick ONE. Keep the bottom-left area of the composition clean — headline text overlays there.
+   End with: "No text, no words, no watermarks in the image."
 
 4. CAPTION (3-5 sentences):
    - Opens with a bold statement (NOT a question, NOT starting with an emoji)
@@ -184,19 +177,11 @@ Return ONLY valid JSON (no markdown):
   const raw = response.choices[0]?.message?.content ?? '{}';
   const parsed = JSON.parse(raw) as GeneratedContent;
 
-  const headline = parsed.headline ?? '';
-  const baseImagePrompt = parsed.imagePrompt ?? '';
-
-  // Inject the exact headline into the image prompt so DALL-E renders the text
-  const imagePrompt = headline
-    ? `${baseImagePrompt} Render this exact headline text in the TOP dark overlay band: "${headline.toUpperCase()}" — bold white uppercase sans-serif, left-aligned, ultra-sharp crisp edges, high resolution typography. Keep the entire bottom-right corner completely free of text. The text must be perfectly spelled and razor sharp, not blurry.`
-    : baseImagePrompt;
-
   return {
-    headline,
-    angle: parsed.angle ?? '',
-    imagePrompt,
-    caption: parsed.caption ?? '',
+    headline:    parsed.headline    ?? '',
+    angle:       parsed.angle       ?? '',
+    imagePrompt: parsed.imagePrompt ?? '',
+    caption:     parsed.caption     ?? '',
   };
 }
 
