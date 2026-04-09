@@ -44,7 +44,7 @@ export async function POST() {
     }
 
     // ── 4. Fetch, composite headline + logo, return as base64 ────────────────
-    const imageData = await stampAndSaveImage(dalleUrl, content.headline);
+    const imageData = await stampAndSaveImage(dalleUrl);
 
     // ── 5. Save text to DB for anti-repetition memory ────────────────────────
     await prisma.igAiPost.create({

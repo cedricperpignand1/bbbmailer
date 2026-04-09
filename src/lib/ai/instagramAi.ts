@@ -136,8 +136,18 @@ GENERATION RULES:
    G) FINISHED NEW BUILD: A brand-new modern residential home just completed in South Florida — clean stucco exterior, impact windows, paver driveway, tropical landscaping, bright sunny day, real estate listing photography quality
    H) TOOLS AND TRADE: Close-up still life of contractor tools on a job site — worn leather tool belt, measuring tape, hard hat, permit documents spread on plywood — warm natural light, authentic and gritty, professional editorial photography
 
-   Pick ONE scene. Describe it with specific South Florida details (neighborhood feel, tropical vegetation, Florida sky, warm light). Keep the lower 40% of the composition relatively clean (less busy) since text will overlay there.
-   End with: "No text, no words, no logos, no watermarks anywhere in the image."
+   Pick ONE scene. Describe it with specific South Florida details (neighborhood feel, tropical vegetation, Florida sky, warm light).
+
+   TYPOGRAPHY OVERLAY — include this in the image:
+   - At the bottom 30% of the image, add a semi-transparent dark overlay band
+   - On that band, render the HEADLINE in large bold clean white sans-serif uppercase text
+   - The headline text must be perfectly readable, clean, and sharp
+   - Use conservative modern typography — think bold editorial magazine font
+   - No decorative fonts, no scripts, no distorted text — clean and professional
+   - The headline will be provided — embed it exactly as written in uppercase bold white text
+   - Small "buildersbidbook.com" label in smaller white text below the headline
+
+   End with: "No logos, no watermarks. Text must be crisp, perfectly spelled, and clearly readable."
 
 4. CAPTION (3-5 sentences):
    - Opens with a bold statement (NOT a question, NOT starting with an emoji)
@@ -173,10 +183,18 @@ Return ONLY valid JSON (no markdown):
   const raw = response.choices[0]?.message?.content ?? '{}';
   const parsed = JSON.parse(raw) as GeneratedContent;
 
+  const headline = parsed.headline ?? '';
+  const baseImagePrompt = parsed.imagePrompt ?? '';
+
+  // Inject the exact headline into the image prompt so DALL-E renders the text
+  const imagePrompt = headline
+    ? `${baseImagePrompt} The headline text to render on the dark overlay band at the bottom is: "${headline.toUpperCase()}" — bold, white, clean sans-serif, perfectly spelled and readable. Below it in smaller text: "BUILDERSBIDBOOK.COM"`
+    : baseImagePrompt;
+
   return {
-    headline: parsed.headline ?? '',
+    headline,
     angle: parsed.angle ?? '',
-    imagePrompt: parsed.imagePrompt ?? '',
+    imagePrompt,
     caption: parsed.caption ?? '',
   };
 }
