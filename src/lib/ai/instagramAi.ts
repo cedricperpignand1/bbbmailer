@@ -139,15 +139,16 @@ GENERATION RULES:
    Pick ONE scene. Describe it with specific South Florida details (neighborhood feel, tropical vegetation, Florida sky, warm light).
 
    TYPOGRAPHY OVERLAY — include this in the image:
-   - At the bottom 30% of the image, add a semi-transparent dark overlay band
-   - On that band, render the HEADLINE in large bold clean white sans-serif uppercase text
-   - The headline text must be perfectly readable, clean, and sharp
-   - Use conservative modern typography — think bold editorial magazine font
-   - No decorative fonts, no scripts, no distorted text — clean and professional
-   - The headline will be provided — embed it exactly as written in uppercase bold white text
-   - Small "buildersbidbook.com" label in smaller white text below the headline
+   - Add a semi-transparent dark overlay band at the TOP of the image (top 28%)
+   - On that top band, render the HEADLINE in large bold clean white sans-serif uppercase text, left-aligned with padding
+   - The text must be in the TOP PORTION only — the bottom-right corner must stay clear (logo goes there)
+   - Font style: bold, modern, editorial sans-serif — like a magazine cover headline
+   - Text must be ultra-sharp, high resolution, crisp edges — NOT blurry, NOT soft, NOT anti-aliased poorly
+   - No decorative fonts, no scripts — clean conservative bold typography only
+   - The headline will be provided — render it exactly as written, uppercase, white, bold
+   - Do NOT place any text in the bottom half of the image
 
-   End with: "No logos, no watermarks. Text must be crisp, perfectly spelled, and clearly readable."
+   End with: "No logos, no watermarks. Text must be razor-sharp, perfectly spelled, crisp and clearly readable at full resolution."
 
 4. CAPTION (3-5 sentences):
    - Opens with a bold statement (NOT a question, NOT starting with an emoji)
@@ -188,7 +189,7 @@ Return ONLY valid JSON (no markdown):
 
   // Inject the exact headline into the image prompt so DALL-E renders the text
   const imagePrompt = headline
-    ? `${baseImagePrompt} The headline text to render on the dark overlay band at the bottom is: "${headline.toUpperCase()}" — bold, white, clean sans-serif, perfectly spelled and readable. Below it in smaller text: "BUILDERSBIDBOOK.COM"`
+    ? `${baseImagePrompt} Render this exact headline text in the TOP dark overlay band: "${headline.toUpperCase()}" — bold white uppercase sans-serif, left-aligned, ultra-sharp crisp edges, high resolution typography. Keep the entire bottom-right corner completely free of text. The text must be perfectly spelled and razor sharp, not blurry.`
     : baseImagePrompt;
 
   return {
