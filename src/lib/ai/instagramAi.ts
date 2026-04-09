@@ -429,12 +429,12 @@ const HOOK_BANK: HookPack[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MARKET_FOCUS_BANK = [
-  'Miami-Dade residential construction activity',
+  'South Florida residential construction activity',
   'South Florida permits and active job sites',
-  'Miami, Hialeah, Doral, Kendall, Homestead project movement',
-  'Broward and Miami-Dade contractors competing for local work',
+  'New construction projects being filed near you every week',
+  'Contractors competing for local work in South Florida',
   'South Florida builders chasing new jobs every week',
-  'Residential and small commercial jobs across Miami-Dade and Broward',
+  'Residential and small commercial jobs across South Florida',
 ];
 
 // Adds numbers / specificity flavor without hard-coding fake claims into output.
@@ -767,10 +767,11 @@ STRICT OUTPUT RULES:
 - 3 to 5 short sentences maximum before hashtags
 - Each sentence on its own line or separated clearly for readability
 - First sentence must be a bold direct statement, not a question
-- Second sentence should add local specificity or practical value
-- Third sentence should position Builders Bid Book as the solution
-- Final line should include a CTA like buildersbidbook.com or Link in bio
+- Second sentence adds practical value — what the platform does or what contractors get
+- Third sentence positions Builders Bid Book as the solution
+- Final line: buildersbidbook.com or "Link in bio"
 - Tone must feel like contractor psychology, not generic social media fluff
+- DO NOT mention specific city names like Miami, Doral, Hialeah, Broward, or any neighborhood — keep it general (South Florida or just "near you")
 - No exaggerated fake numbers
 - No cheesy motivational copy
 - No startup/corporate jargon
