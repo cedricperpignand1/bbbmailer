@@ -4,10 +4,11 @@ import {
   generateInstagramContent,
   generateInstagramImage,
 } from '@/lib/ai/instagramAi';
+import { stampAndSaveImage } from '@/lib/imageStamp';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 120; // DALL-E 3 + GPT-4o can take up to ~40s combined
+export const maxDuration = 120; // DALL-E 3 + GPT-4o can take ~40s combined
 
 export async function POST() {
   try {
@@ -34,16 +35,21 @@ export async function POST() {
     }
 
     // ── 3. Generate image via DALL-E 3 ───────────────────────────────────────
-    const imageUrl = await generateInstagramImage(content.imagePrompt);
+    const dalleUrl = await generateInstagramImage(content.imagePrompt);
 
-    if (!imageUrl) {
+    if (!dalleUrl) {
       return NextResponse.json(
         { ok: false, error: 'Image generation failed — try again.' },
         { status: 500 }
       );
     }
 
-    // ── 4. Save text content to DB (image URL is temporary, not stored) ──────
+    // ── 4. Download, stamp logo, save locally ────────────────────────────────
+    // Returns a stable local path like /ig-ai/post-1234567890.jpg
+    // This never expires, unlike the raw DALL-E URL.
+    const localImagePath = await stampAndSaveImage(dalleUrl);
+
+    // ── 5. Save text content to DB for anti-repetition memory ────────────────
     await prisma.igAiPost.create({
       data: {
         headline: content.headline,
@@ -54,14 +60,15 @@ export async function POST() {
       },
     });
 
-    // ── 5. Return full result ─────────────────────────────────────────────────
+    // ── 6. Return full result ─────────────────────────────────────────────────
     return NextResponse.json({
       ok: true,
-      imageUrl,
+      imageUrl: localImagePath,   // stable local URL, never expires
       headline: content.headline,
       angle: content.angle,
       caption: content.caption,
       firstComment: content.firstComment,
+      imagePrompt: content.imagePrompt,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error occurred';

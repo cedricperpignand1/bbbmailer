@@ -289,28 +289,30 @@ export default function InstagramAiPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* Left: Generated Image */}
             <div className="space-y-3">
-              <div className="relative overflow-hidden rounded-2xl bg-slate-900 shadow-lg">
-                {/* Image */}
+              <div className="relative overflow-hidden rounded-2xl bg-slate-100 shadow-lg">
+                {/* Image — served locally, never expires */}
                 <div className="relative aspect-square w-full">
                   <Image
                     src={post.imageUrl}
                     alt={post.headline || "Generated Instagram image"}
                     fill
                     className="object-cover"
-                    unoptimized // DALL-E URLs are external, skip optimization
+                    unoptimized
                   />
-                  {/* Headline overlay */}
-                  {post.headline && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-5 pb-5 pt-10">
-                      <p className="text-lg font-black text-white leading-tight drop-shadow-lg">
-                        {post.headline}
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
               {/* Image action row */}
               <div className="flex items-center gap-2">
+                <a
+                  href={post.imageUrl}
+                  download
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-700"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                  Download image
+                </a>
                 <a
                   href={post.imageUrl}
                   target="_blank"
@@ -320,10 +322,9 @@ export default function InstagramAiPage() {
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                   </svg>
-                  Open full size
+                  Full size
                 </a>
-                <CopyButton text={post.imageUrl} label="Copy image URL" />
-                <span className="text-xs text-slate-400 ml-auto">URL expires ~1h</span>
+                <span className="text-xs text-emerald-600 font-medium ml-auto">Logo stamped ✓</span>
               </div>
             </div>
 
@@ -374,7 +375,7 @@ export default function InstagramAiPage() {
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 space-y-1.5">
                 <p className="text-xs font-bold text-emerald-800 mb-2">Ready to post checklist</p>
                 {[
-                  "Download image (open full size → save)",
+                  "Download image (logo already stamped on it)",
                   "Copy caption and paste into Instagram",
                   "Post the image",
                   "Immediately post first comment and pin it",
@@ -411,9 +412,9 @@ export default function InstagramAiPage() {
           Previous posts are remembered so content stays fresh.
         </span>
         <span className="text-slate-300">|</span>
-        <span>Images expire ~1h — download immediately after generating.</span>
+        <span>Images are saved locally with the BBB logo stamped in — they never expire.</span>
         <span className="text-slate-300">|</span>
-        <span>No Instagram API needed — paste and post manually.</span>
+        <span>No Instagram API — generate, download, and post manually.</span>
       </div>
     </div>
   );
