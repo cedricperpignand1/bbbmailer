@@ -667,3 +667,18 @@ model GadsNegativeKeyword {
   addedBy String   @default("manual")
   addedAt DateTime @default(now())
 }
+
+// ── Instagram AI Content Generator ────────────────────────────────────────────
+// Stores generated post concepts for anti-repetition memory.
+// Images are NOT stored here — they're temporary DALL-E URLs shown to the user.
+model IgAiPost {
+  id           Int      @id @default(autoincrement())
+  headline     String   @default("")
+  angle        String   @default("")        // e.g. "FOMO angle", "Urgency angle"
+  imagePrompt  String   @db.Text            // the DALL-E prompt used
+  caption      String   @db.Text
+  firstComment String   @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
