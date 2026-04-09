@@ -7,19 +7,36 @@ const LOGO_PATH = path.join(process.cwd(), 'public', 'bbb-logo.png');
 const CUSTOM_FONT_PATH = path.join(process.cwd(), 'public', 'fonts', 'inter-bold.ttf');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Load fonts once at startup.
-// If the user drops public/fonts/inter-bold.ttf it will be used for crisp text.
-// Otherwise falls back to system fonts (works on Windows/Mac, and on Linux/
-// Vercel Skia has a built-in Latin fallback so basic text still renders).
+// Font loading — @napi-rs/canvas needs explicit TTF files, it does NOT
+// pick up system fonts automatically. We try multiple locations in order.
 // ─────────────────────────────────────────────────────────────────────────────
-let fontsReady = false;
+const FONT_CANDIDATES = [
+  // 1. User-provided font in public/fonts/
+  CUSTOM_FONT_PATH,
+  // 2. Windows (local dev)
+  'C:\\Windows\\Fonts\\arialbd.ttf',   // Arial Bold
+  'C:\\Windows\\Fonts\\calibrib.ttf',  // Calibri Bold
+  'C:\\Windows\\Fonts\\arial.ttf',     // Arial Regular fallback
+  // 3. Linux / Vercel (Amazon Linux / Debian / Ubuntu)
+  '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+  '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+  '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
+  '/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf',
+  '/usr/share/fonts/liberation/LiberationSans-Bold.ttf',
+];
+
+let fontFamily = 'sans-serif';
+let fontsReady  = false;
+
 function ensureFonts() {
   if (fontsReady) return;
-  if (fs.existsSync(CUSTOM_FONT_PATH)) {
-    GlobalFonts.registerFromPath(CUSTOM_FONT_PATH, 'BBBFont');
+  for (const p of FONT_CANDIDATES) {
+    if (fs.existsSync(p)) {
+      GlobalFonts.registerFromPath(p, 'BBBFont');
+      fontFamily = '"BBBFont", sans-serif';
+      break;
+    }
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  try { (GlobalFonts as any).loadSystemFonts(); } catch { /* unavailable on some envs */ }
   fontsReady = true;
 }
 
@@ -70,9 +87,6 @@ function buildTextOverlay(headline: string, imgWidth: number, imgHeight: number)
   ensureFonts();
 
   const text = sanitize(headline);
-  const fontFamily = fs.existsSync(CUSTOM_FONT_PATH)
-    ? '"BBBFont", sans-serif'
-    : 'sans-serif';
   const maxTextWidth = imgWidth - 96;
 
   const canvas = createCanvas(imgWidth, imgHeight);
