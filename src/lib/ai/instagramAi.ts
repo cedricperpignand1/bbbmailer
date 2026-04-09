@@ -1,40 +1,105 @@
 import OpenAI from 'openai';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Brand context — update this when messaging evolves.
+// BUILDERS BID BOOK — INSTAGRAM CONTENT ENGINE
+// Full upgraded version
 // ─────────────────────────────────────────────────────────────────────────────
+
 export const BBB_BRAND_CONTEXT = `
 BRAND: Builders Bid Book (buildersbidbook.com)
 
-WHAT IT IS:
-A construction intelligence platform that gives South Florida contractors an unfair advantage. It surfaces active construction projects, permits, bidding opportunities, and owner/developer contact info — all in one place.
+CORE POSITIONING:
+Builders Bid Book is a construction intelligence platform for South Florida contractors.
+It helps subs, GCs, estimators, and construction business owners find real projects faster,
+see construction activity earlier, and reach owners / developers directly.
 
-WHAT IT DOES FOR CONTRACTORS:
-- Discover new construction projects and permits the moment they're filed
-- Find bidding opportunities before competitors even know they exist
-- Access owner/developer contact info to reach decision makers directly
-- Track local construction activity in real time
-- Stop wasting time cold-calling — bid on real, active projects
+WHAT CONTRACTORS GET:
+- Active construction projects in South Florida
+- New permits as they are filed
+- Bidding opportunities before most competitors know about them
+- Owner / developer contact info
+- Local project intelligence in one place
+- Faster prospecting with less wasted time
+
+CORE EMOTIONAL SELL:
+If you see the project first, you have the first shot at the money.
+Speed matters. Local information matters. Access matters.
 
 TARGET AUDIENCE:
-Subcontractors, general contractors, estimators, construction business owners in South Florida (Miami-Dade, Broward, Palm Beach). Builders who hustle and want more bids.
+- Subcontractors
+- General contractors
+- Estimators
+- Small construction business owners
+- Hustlers in Miami-Dade, Broward, Palm Beach
+- Contractors who want more bids, more work, more money
 
 BRAND PERSONALITY:
-Aggressive, exclusive, powerful, FOMO-inducing. Miami energy. First to know = first to bid = first to win.
+- Aggressive
+- Exclusive
+- Smart
+- Powerful
+- FOMO-driven
+- Local
+- Clear
+- Bold
+- Miami energy
+- No fluff
 
 VISUAL BRAND IDENTITY (CRITICAL):
-- Primary brand color: vivid, bright ROYAL BLUE (like cobalt blue, #1055FF). NOT dark navy. NOT midnight blue. BRIGHT BOLD BLUE.
-- Secondary colors: white, and orange/yellow as accent only
-- Background options: solid bright royal blue OR clean white
-- Logo: white pill-shaped badge with "BUILDER'S BID BOOK" bold blue text + hammer icon (appears in corner of posts)
-- Style: FLAT GRAPHIC DESIGN — clean, modern, Canva-style marketing creative
-- Typography: ultra-bold, heavy-weight, massive sans-serif — the text IS the design
-- NOT photorealistic. NOT dark. NOT cinematic. NOT moody.
-- Think: a clean, bold Canva template made by a professional designer
+- Primary brand color: BRIGHT ROYAL BLUE / COBALT BLUE (#1055FF style)
+- Secondary colors: white
+- Accent colors: orange / yellow in small amounts only
+- Background style: clean white or bright royal blue
+- Text style: ultra-bold, heavy, huge sans-serif
+- Layout style: Canva-style premium marketing creative
+- Style should feel like a high-converting social ad
+- NOT cinematic
+- NOT moody
+- NOT dark luxury
+- NOT gritty grunge
+- NOT photorealistic poster with dramatic shadows
+- Flat, clean, premium, sharp, bright, social-media-native
+
+LOGO RULE:
+- White pill badge with BUILDER'S BID BOOK in bold blue
+- Hammer icon
+- Logo is added later in post-processing
+- AI image must NOT generate any logo or text
+
+IMPORTANT BRAND LANGUAGE:
+Use direct contractor language:
+- projects
+- permits
+- bids
+- work
+- jobs
+- owners
+- developers
+- local construction
+- competition
+- first
+- today
+- near you
+- South Florida
+
+AVOID:
+- cheesy slogans
+- vague motivational language
+- corporate jargon
+- startup-speak
+- abstract metaphors
+- cute wordplay
+- confusing hooks
 `;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TYPES
+// ─────────────────────────────────────────────────────────────────────────────
 
 export type GeneratedContent = {
   headline: string;
+  subheadline?: string;
+  cta?: string;
   angle: string;
   imagePrompt: string;
   caption: string;
@@ -46,204 +111,778 @@ type PreviousPost = {
   caption: string;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Scene bank — one is selected at random in code so DALL-E varies every time.
-// When people appear they must be from behind or side only — no face, no
-// identifiable features. Variety across construction, data, aerial, design.
-// ─────────────────────────────────────────────────────────────────────────────
-const SCENE_BANK: Record<string, string> = {
-  // ── Construction job site ─────────────────────────────────────────────────
-  A: 'FRESH FOUNDATION: Freshly poured concrete slab on a South Florida residential lot, rebar grid, wooden forms at the perimeter, palm trees and bright blue sky, Florida sunshine, no people in frame',
-  B: 'WOOD FRAMING: New home wood frame going up in a South Florida neighborhood, stud walls and roof trusses, one or two workers seen fully from behind wearing hard hats and work clothes — no faces visible, golden hour warm light',
-  C: 'CBS BLOCK WALLS: Concrete block masonry walls rising on a residential site, exposed rebar columns, blue sky, palm trees along the street, typical Miami-Dade block, bright midday, no people',
-  D: 'EMPTY LOT: Cleared residential lot ready for construction, surrounding stucco homes visible, fresh gravel and surveyor stakes, palm trees, bright sunny South Florida day, no people',
-  E: 'EXCAVATOR ACTIVE: Yellow excavator clearing a residential South Florida lot, freshly turned red soil, palm trees at the property edge, bright blue sky, high-energy job site — operator silhouette in closed cab only if visible, no faces',
-  F: 'CONCRETE POUR: Concrete mixer truck chute pouring concrete into residential forms, two workers seen from behind in hard hats guiding the pour, dramatic South Florida daylight, action shot, no faces',
-  G: 'ROOFTOP ANGLE: Looking up from the ground at the bare roof trusses of a new South Florida home under construction, vivid blue sky and palm fronds framing the shot, strong geometric lines, no people',
-  H: 'FINISHED NEW BUILD: Brand-new modern stucco home, white exterior, large impact windows, paver driveway, lush tropical landscaping, real estate photography quality, no people, no cars',
-  I: 'ELECTRICAL ROUGH-IN: Interior of a home under construction, exposed stud walls, clean electrical conduit runs and junction boxes, warm work-light glow, no people visible',
-  J: 'CONTRACTOR REVIEWING PLANS: Contractor seen fully from behind — hard hat on, work clothes — holding rolled blueprints while standing in front of a half-built stucco home, South Florida vegetation, morning light, face never visible',
+type Scene = {
+  id: string;
+  label: string;
+  category: 'jobsite' | 'documents' | 'aerial' | 'tech' | 'luxury-home' | 'permit-board';
+  description: string;
+  allowPeople?: boolean;
+  layoutHint: string;
+};
 
-  // ── Flat lays / documents / permits ──────────────────────────────────────
-  K: 'BLUEPRINT FLAT LAY: Overhead shot of large architectural blueprints spread across a construction table, yellow hard hat resting on one corner, measuring tape and pencil beside it, no hands or people in frame, warm editorial lighting',
-  L: 'PERMIT DOCUMENTS FLAT LAY: Stack of official South Florida building permit documents with architectural stamps and property details, a ruler and red pen on top, clean desk surface, overhead photography, no people',
-  M: 'TOOLS FLAT LAY: Tool belt, yellow hard hat, folded permit papers, measuring tape, and pencil arranged on rough plywood — warm shallow depth-of-field editorial photo, no hands or people visible',
-  N: 'PERMIT SIGN CLOSEUP: Official building permit posted on a wooden stake in front of a South Florida property, bokeh palm trees and residential street in background, golden hour light, no people',
+type HookPack = {
+  id: string;
+  angle: string;
+  intent: string;
+  emotionalDriver: string;
+  examples: string[];
+};
 
-  // ── Aerial / neighborhood ─────────────────────────────────────────────────
-  O: 'AERIAL NEIGHBORHOOD: Drone view straight down at a South Florida residential neighborhood — grid of streets, stucco rooftops, green yards, two lots clearly mid-construction, palm canopy throughout, no people visible from above',
-  P: 'AERIAL CONSTRUCTION SITE: Drone shot looking down at a single active South Florida residential construction site — concrete slab and framing visible from above, surrounded by neighboring homes, bright midday',
-  Q: 'MIAMI STREET LEVEL: Wide-angle view of a typical Miami-Dade residential block, two homes under construction side by side, stucco homes complete on either side, palm-lined street, bright day, no people',
-  R: 'DORAL TOWNHOUSES: Row of new modern townhouses under construction in a South Florida suburb, CBS block walls at various stages, stacked materials, palm trees, bright sky, no people',
-
-  // ── Tech / platform / data-adjacent ──────────────────────────────────────
-  S: 'LAPTOP WITH MAP: Open laptop on a weathered job-site folding table outdoors, screen showing a satellite map view with bright blue dots pinned across South Florida neighborhoods, rolled blueprints beside it, natural daylight, no people',
-  T: 'DATA DESK FLATLAY: Overhead shot of a clean desk — printed satellite map of Miami-Dade with blue circles marking active projects, a stack of permits, yellow hard hat, measuring tape, no people, crisp studio lighting',
-  U: 'PERMIT STACK WITH LAPTOP: Thick stack of building permit printouts beside an open laptop, mechanical pencil on top, South Florida palm trees visible through a window behind, no people, bright natural light',
+type PromptBundle = {
+  scene: Scene;
+  hook: HookPack;
+  marketFocus: string;
+  detailLine: string;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Angle bank — ensures diversity across generations
+// SCENE BANK
+// More variety. All still on-brand.
 // ─────────────────────────────────────────────────────────────────────────────
-const ANGLE_BANK = [
-  'FOMO angle — competitors are winning bids you should have gotten',
-  'Data/permits angle — specific numbers about South Florida construction activity right now',
-  'Pain point angle — frustration of losing a bid to someone who found the project first',
-  'Urgency angle — projects being claimed today while you wait',
-  'Platform feature angle — show a specific thing the platform does (map, permit card, project details)',
-  'Success/transformation angle — what changes when you use BBB',
-  'Market insight angle — what is happening in South Florida construction right now',
-  'First mover angle — first to bid has the highest win rate',
-  'Hustle angle — real contractors go find the work, they do not wait for it',
-  'Permits angle — permits filed today are jobs starting next month',
-  '"Tinder of Construction" angle — matching contractors to projects',
-  'Local specificity angle — Miami, Miami-Dade, Broward, Doral, Hialeah — specific neighborhoods',
+
+const SCENE_BANK: Scene[] = [
+  {
+    id: 'A1',
+    label: 'Fresh concrete slab',
+    category: 'jobsite',
+    description:
+      'Freshly poured concrete slab on a South Florida residential lot, clean wooden forms, rebar at edges, bright tropical daylight, palm trees, vivid blue sky, crisp professional composition',
+    allowPeople: false,
+    layoutHint: 'Keep lower-left and top-center visually clean for bold text overlay',
+  },
+  {
+    id: 'A2',
+    label: 'Wood framing home build',
+    category: 'jobsite',
+    description:
+      'New residential wood framing in a South Florida neighborhood, roof trusses and stud walls, premium editorial construction photography, vivid blue sky, palm trees, bright sun',
+    allowPeople: true,
+    layoutHint: 'Strong framing structure in upper half, clean negative space in bottom-left',
+  },
+  {
+    id: 'A3',
+    label: 'CBS block construction',
+    category: 'jobsite',
+    description:
+      'Concrete block masonry walls going up on a South Florida residential site, rebar columns, stacked materials, bright midday light, tropical surroundings',
+    allowPeople: false,
+    layoutHint: 'Subject centered, left edge clean for large text',
+  },
+  {
+    id: 'A4',
+    label: 'Excavator on cleared lot',
+    category: 'jobsite',
+    description:
+      'Yellow excavator working on a cleared South Florida lot, fresh soil, palm trees, warm bright daylight, premium construction editorial style',
+    allowPeople: false,
+    layoutHint: 'Machine in upper-right, open lower-left for headline',
+  },
+  {
+    id: 'A5',
+    label: 'Concrete pour action',
+    category: 'jobsite',
+    description:
+      'Concrete truck chute pouring into residential forms, active job site in South Florida, bright high-energy daylight, clean premium photo style',
+    allowPeople: true,
+    layoutHint: 'Action focused in top half, bold text zone preserved lower-left',
+  },
+  {
+    id: 'A6',
+    label: 'Contractor reviewing plans from behind',
+    category: 'jobsite',
+    description:
+      'Contractor standing fully from behind holding rolled plans while facing a home under construction, South Florida vegetation, bright morning light, premium editorial style',
+    allowPeople: true,
+    layoutHint: 'Person on right third, open left side for ad text',
+  },
+  {
+    id: 'B1',
+    label: 'Blueprint flat lay',
+    category: 'documents',
+    description:
+      'Overhead flat lay of architectural blueprints, measuring tape, pencil, yellow hard hat, clean desk or plywood surface, bright crisp lighting',
+    allowPeople: false,
+    layoutHint: 'Blueprint detail across frame with open lower-left for typography',
+  },
+  {
+    id: 'B2',
+    label: 'Permit documents flat lay',
+    category: 'documents',
+    description:
+      'Stack of South Florida building permit style paperwork, ruler, pen, clipboard, crisp overhead composition, bright studio lighting, premium marketing look',
+    allowPeople: false,
+    layoutHint: 'Papers concentrated upper-right, left side clean',
+  },
+  {
+    id: 'B3',
+    label: 'Permit board in front of property',
+    category: 'permit-board',
+    description:
+      'Building permit board posted in front of a South Florida residential property under construction, palm trees blurred in background, bright daylight',
+    allowPeople: false,
+    layoutHint: 'Permit board upper-middle, clear lower-left area',
+  },
+  {
+    id: 'B4',
+    label: 'Tools and permit papers',
+    category: 'documents',
+    description:
+      'Tool belt, folded permit papers, measuring tape, hard hat arranged on plywood, clean bright ad-style composition',
+    allowPeople: false,
+    layoutHint: 'Cluster in upper half, preserve bottom-left open space',
+  },
+  {
+    id: 'C1',
+    label: 'Aerial neighborhood construction',
+    category: 'aerial',
+    description:
+      'Drone view of a South Florida residential neighborhood with a few lots visibly under construction, palm canopy, bright tropical light, clean urban pattern',
+    allowPeople: false,
+    layoutHint: 'Main visual energy top and center, open lower-left text area',
+  },
+  {
+    id: 'C2',
+    label: 'Single aerial construction site',
+    category: 'aerial',
+    description:
+      'Drone shot looking down on one active South Florida residential construction site surrounded by finished homes, bright midday sun',
+    allowPeople: false,
+    layoutHint: 'Site centered high, keep lower-left negative space simple',
+  },
+  {
+    id: 'C3',
+    label: 'Miami neighborhood street with active builds',
+    category: 'aerial',
+    description:
+      'Street-level wide view of a Miami-Dade residential block with homes under construction, palm-lined street, bright clear sky, clean premium real estate photo feel',
+    allowPeople: false,
+    layoutHint: 'Buildings dominate upper 60%, text room at lower-left',
+  },
+  {
+    id: 'D1',
+    label: 'Laptop with project map',
+    category: 'tech',
+    description:
+      'Open laptop on a folding table outdoors at a construction setting, map-like project tracking screen visible with bright blue markers, rolled plans nearby, daylight',
+    allowPeople: false,
+    layoutHint: 'Laptop on right or center-right, negative space left',
+  },
+  {
+    id: 'D2',
+    label: 'Data desk flat lay',
+    category: 'tech',
+    description:
+      'Clean desk flat lay with printed satellite map of Miami-Dade, blue project markers, permit stack, hard hat, measuring tape, sharp bright studio lighting',
+    allowPeople: false,
+    layoutHint: 'Map concentrated upper-right, clean left side',
+  },
+  {
+    id: 'D3',
+    label: 'Permit stack beside laptop',
+    category: 'tech',
+    description:
+      'Large stack of permit printouts beside an open laptop, natural light, palm trees visible through a window, bright premium office feel',
+    allowPeople: false,
+    layoutHint: 'Objects grouped right, spacious left text field',
+  },
+  {
+    id: 'E1',
+    label: 'Luxury new build',
+    category: 'luxury-home',
+    description:
+      'Brand-new modern South Florida stucco home with large impact windows, tropical landscaping, paver driveway, bright editorial real estate photography',
+    allowPeople: false,
+    layoutHint: 'Home in upper frame, lower-left reserved for bold copy',
+  },
+  {
+    id: 'E2',
+    label: 'Townhomes under construction',
+    category: 'luxury-home',
+    description:
+      'New row of modern townhomes under construction in South Florida, block walls in progress, stacks of material, palm trees, vivid daylight',
+    allowPeople: false,
+    layoutHint: 'Buildings carry top half, lower-left remains clean',
+  },
 ];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ANGLE / HOOK BANK
+// These control the psychology and messaging strategy
+// ─────────────────────────────────────────────────────────────────────────────
+
+const HOOK_BANK: HookPack[] = [
+  {
+    id: 'H1',
+    angle: 'competitor FOMO',
+    intent: 'Show that competitors are finding work first',
+    emotionalDriver: 'fear of being late',
+    examples: [
+      'Your competition is finding projects first',
+      'The first contractor to see it usually wins the shot',
+      'You are losing bids before you even know the project exists',
+    ],
+  },
+  {
+    id: 'H2',
+    angle: 'permit speed advantage',
+    intent: 'Connect permits today with jobs tomorrow',
+    emotionalDriver: 'urgency',
+    examples: [
+      'Permits filed today become jobs next',
+      'See construction starting before everybody else',
+      'Know who is building while others are still guessing',
+    ],
+  },
+  {
+    id: 'H3',
+    angle: 'local project discovery',
+    intent: 'Make the product feel hyper-local and practical',
+    emotionalDriver: 'control',
+    examples: [
+      'See what is being built near you',
+      'Find projects in Miami before your competition',
+      'South Florida contractors need local intel',
+    ],
+  },
+  {
+    id: 'H4',
+    angle: 'owner contact advantage',
+    intent: 'Stress direct access to decision makers',
+    emotionalDriver: 'power',
+    examples: [
+      'Reach owners directly',
+      'Stop guessing who to call',
+      'Get the contact info behind the project',
+    ],
+  },
+  {
+    id: 'H5',
+    angle: 'real contractor hustle',
+    intent: 'Frame BBB as a hustler tool',
+    emotionalDriver: 'identity',
+    examples: [
+      'Real contractors go find the work',
+      'The hungriest contractors do not wait',
+      'Serious builders track jobs every day',
+    ],
+  },
+  {
+    id: 'H6',
+    angle: 'map intelligence',
+    intent: 'Show visual platform value',
+    emotionalDriver: 'clarity',
+    examples: [
+      'See active construction on a map',
+      'Track projects visually',
+      'Construction activity all in one place',
+    ],
+  },
+  {
+    id: 'H7',
+    angle: 'more bids more money',
+    intent: 'Tie usage directly to financial upside',
+    emotionalDriver: 'gain',
+    examples: [
+      'More projects means more bids',
+      'More bids means more work',
+      'More work means more money',
+    ],
+  },
+  {
+    id: 'H8',
+    angle: 'Miami market activity',
+    intent: 'Use regional momentum',
+    emotionalDriver: 'relevance',
+    examples: [
+      'Miami is building every day',
+      'South Florida construction never stops',
+      'Work is moving fast in this market',
+    ],
+  },
+  {
+    id: 'H9',
+    angle: 'pain of late discovery',
+    intent: 'Hit the frustration point',
+    emotionalDriver: 'regret',
+    examples: [
+      'Worst feeling is hearing about a project too late',
+      'By the time most people find it, it is already moving',
+      'Late information kills good opportunities',
+    ],
+  },
+  {
+    id: 'H10',
+    angle: 'exclusive access',
+    intent: 'Make the platform feel unfairly valuable',
+    emotionalDriver: 'exclusivity',
+    examples: [
+      'This is the unfair advantage',
+      'Get access most contractors do not have',
+      'Be the first one in the room',
+    ],
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOCAL MARKET SPECIFICITY BANK
+// Makes posts feel more real and less generic
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MARKET_FOCUS_BANK = [
+  'Miami-Dade residential construction activity',
+  'South Florida permits and active job sites',
+  'Miami, Hialeah, Doral, Kendall, Homestead project movement',
+  'Broward and Miami-Dade contractors competing for local work',
+  'South Florida builders chasing new jobs every week',
+  'Residential and small commercial jobs across Miami-Dade and Broward',
+];
+
+// Adds numbers / specificity flavor without hard-coding fake claims into output.
+// The model can use this as “style direction,” not factual reporting.
+const DETAIL_STYLE_BANK = [
+  'Use concrete local detail and practical contractor language.',
+  'Make the caption feel like it came from someone who knows how contractors win jobs.',
+  'Include operational detail, not generic marketing fluff.',
+  'Stress speed, access, and local visibility.',
+  'Make it feel like missing a project costs money.',
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ANTI-REPETITION / PHRASE BANS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const HARD_BANNED_HEADLINE_PHRASES = [
+  'early bird',
+  'strike while the iron is hot',
+  'game changer',
+  'unlock',
+  'revolutionize',
+  'next level',
+  'secret weapon',
+  'skyrocket',
+  'dominate the market',
+];
+
+const HARD_BANNED_CAPTION_PHRASES = [
+  'in today’s fast-paced world',
+  'whether you are',
+  'this isn’t just',
+  'it’s not just',
+  'don’t miss out',
+  'ready to take your business to the next level',
+  'the future of construction',
+  'change the game',
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPENAI CLIENT
+// ─────────────────────────────────────────────────────────────────────────────
+
 let _openai: OpenAI | null = null;
+
 function getOpenAI(): OpenAI {
   if (!_openai) {
-    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+    _openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY!,
+    });
   }
   return _openai;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Generate text content (caption, imagePrompt, headline, angle)
+// HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
-export async function generateInstagramContent(
-  previousPosts: PreviousPost[]
-): Promise<GeneratedContent> {
-  const openai = getOpenAI();
 
-  const previousContext =
-    previousPosts.length > 0
-      ? `\n\nPREVIOUSLY GENERATED (DO NOT REPEAT these hooks, angles, structures, or phrases):\n${previousPosts
-          .slice(0, 30)
-          .map(
-            (p, i) =>
-              `${i + 1}. Angle: "${p.angle}" | Headline: "${p.headline}" | Caption start: "${p.caption.slice(0, 100)}..."`
-          )
-          .join('\n')}`
-      : '';
+function randomItem<T>(items: T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
+}
 
-  const suggestedAngle = ANGLE_BANK[Math.floor(Math.random() * ANGLE_BANK.length)];
+function shuffle<T>(items: T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
-  // Pick scene in code so DALL-E gets true variety — NOT left to the AI
-  const sceneKeys = Object.keys(SCENE_BANK);
-  const chosenSceneKey = sceneKeys[Math.floor(Math.random() * sceneKeys.length)];
-  const chosenScene = SCENE_BANK[chosenSceneKey];
+function collapseWhitespace(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
 
-  const systemPrompt = `You are an elite Instagram marketing strategist for Builders Bid Book — a construction intelligence platform for South Florida contractors.
+function normalizeLineBreaks(value: string): string {
+  return value.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
 
-${BBB_BRAND_CONTEXT}
+function sanitizeText(value: string): string {
+  return normalizeLineBreaks(value)
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .trim();
+}
 
-YOUR MISSION:
-Generate ONE complete viral Instagram post. The content must be bold, direct, and feel like a premium paid ad.
+function containsBannedPhrase(value: string, bannedList: string[]): boolean {
+  const lower = value.toLowerCase();
+  return bannedList.some((phrase) => lower.includes(phrase.toLowerCase()));
+}
 
-SUGGESTED ANGLE: ${suggestedAngle}
+function safeSlice(value: string, max: number): string {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max - 1).trim()}…`;
+}
 
-GENERATION RULES:
+function buildPreviousContext(previousPosts: PreviousPost[]): string {
+  if (!previousPosts.length) return '';
 
-1. HEADLINE (max 7 words):
-   - Bold, scroll-stopping text that will appear on the image
-   - SIMPLE, DIRECT words only — many contractors speak English as a second language (Spanish, Creole). Anyone must understand it in under 2 seconds.
-   - NO idioms, NO wordplay, NO riddles, NO metaphors, NO clever phrases that require cultural knowledge
-   - Use plain action words and numbers: Find, Get, Win, Beat, Know, See, More, Now, Today, First, Every, New
-   - Good examples: "We Find Construction Projects Near You" | "Know Exactly Who's Building Near You" | "Find New Projects Before Your Competition" | "More Bids. More Work. More Money." | "See Every New Permit In Miami Today"
-   - Bad examples (too clever / idiomatic): "Get There Before Ground Is Broken" | "The Early Bird Gets the Bid" | "Strike While the Iron Is Hot"
+  return `
+PREVIOUSLY GENERATED CONTENT — DO NOT REPEAT THESE HOOKS, HEADLINES, OPENINGS, OR STRUCTURES:
+${previousPosts
+  .slice(0, 40)
+  .map((p, i) => {
+    const headline = sanitizeText(p.headline || '');
+    const angle = sanitizeText(p.angle || '');
+    const caption = sanitizeText(p.caption || '');
+    return `${i + 1}. Angle="${safeSlice(angle, 80)}" | Headline="${safeSlice(headline, 80)}" | CaptionStart="${safeSlice(caption, 120)}"`;
+  })
+  .join('\n')}
+`;
+}
 
-2. ANGLE (1 short phrase):
-   - The core marketing concept for memory/tracking
-   - Example: "competitor FOMO" or "platform UI mockup" or "permits data urgency"
+function pickPromptBundle(): PromptBundle {
+  const scene = randomItem(SCENE_BANK);
+  const hook = randomItem(HOOK_BANK);
+  const marketFocus = randomItem(MARKET_FOCUS_BANK);
+  const detailLine = randomItem(DETAIL_STYLE_BANK);
 
-3. IMAGE_PROMPT (for DALL-E 3 — follow these rules EXACTLY):
-   THE IMAGE IS A BACKGROUND SCENE ONLY. Text and logo are added separately in post-processing.
+  return { scene, hook, marketFocus, detailLine };
+}
 
-   ━━━ ABSOLUTE RULES — NEVER BREAK THESE ━━━
-   • If any person appears: ONLY from behind or side profile — hard hat on, generic work clothes, NO face visible, NO identifiable features, NO specific ethnicity or gender readable.
-   • NO text, NO words, NO readable signs, NO logos, NO watermarks anywhere in the image.
-   • NOT skyscrapers or high-rises — residential and small commercial only.
+function buildPeopleRule(scene: Scene): string {
+  if (!scene.allowPeople) {
+    return 'No people, no humans, no faces, no hands in frame.';
+  }
 
-   MANDATORY SCENE — use EXACTLY this, no substitutions:
-   "${chosenScene}"
+  return [
+    'If any person appears, they must be shown only from behind or side profile.',
+    'No visible face.',
+    'No identifiable features.',
+    'No readable ethnicity or gender cues.',
+    'Generic work clothes and hard hat only.',
+    'No direct eye contact.',
+  ].join(' ');
+}
 
-   VISUAL STYLE:
-   - Professional editorial/magazine photography — bright, clean, sharp, well-lit
-   - South Florida feel: vivid blue sky, palm trees, tropical daylight
-   - Square 1:1 composition — strongest visual element in upper 60%, bottom-left area kept open (text overlay goes there)
-   - High contrast, saturated colors, premium quality
+function ensureHashtags(caption: string): string {
+  const hashtagLine =
+    '#ContractorLife #SouthFlorida #ConstructionIndustry #BuildersLife #MiamiConstruction #GeneralContractor #Subcontractor #ConstructionBusiness #BuildersBidBook #FloridaConstruction';
 
-   Write the imagePrompt as a detailed vivid description of this specific scene only.
-   End with: "No people, no humans, no faces, no text, no logos, no watermarks."
+  if (caption.includes('#')) return caption;
+  return `${caption.trim()}\n\n${hashtagLine}`;
+}
 
-4. CAPTION (3-5 sentences):
-   - Opens with a bold statement (NOT a question, NOT starting with an emoji)
-   - Second sentence adds specificity (numbers, location, detail)
-   - Third sentence positions BBB as the solution
-   - CTA: "Link in bio" or "buildersbidbook.com"
-   - Line breaks between sentences for Instagram readability
-   - 8-10 relevant hashtags at end
-   - Hashtags: #ContractorLife #SouthFlorida #ConstructionIndustry #BuildersLife #MiamiConstruction #GeneralContractor #Subcontractor #ConstructionBusiness #BuildersBidBook #FloridaConstruction
-${previousContext}
+function validateGeneratedContent(payload: Partial<GeneratedContent>): GeneratedContent {
+  const headline = sanitizeText(payload.headline || '');
+  const subheadline = sanitizeText(payload.subheadline || '');
+  const cta = sanitizeText(payload.cta || '');
+  const angle = sanitizeText(payload.angle || '');
+  const imagePrompt = sanitizeText(payload.imagePrompt || '');
+  const caption = ensureHashtags(sanitizeText(payload.caption || ''));
 
-Return ONLY valid JSON (no markdown):
-{
-  "headline": "...",
-  "angle": "...",
-  "imagePrompt": "...",
-  "caption": "..."
-}`;
+  if (!headline) throw new Error('Generated headline is empty.');
+  if (!angle) throw new Error('Generated angle is empty.');
+  if (!imagePrompt) throw new Error('Generated imagePrompt is empty.');
+  if (!caption) throw new Error('Generated caption is empty.');
 
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      {
-        role: 'user',
-        content: 'Generate a completely fresh, viral Instagram post for Builders Bid Book. Make it bold and distinct from anything previously created.',
-      },
-    ],
-    temperature: 0.92,
-    response_format: { type: 'json_object' },
-  });
+  if (containsBannedPhrase(headline, HARD_BANNED_HEADLINE_PHRASES)) {
+    throw new Error(`Headline contained banned phrase: "${headline}"`);
+  }
 
-  const raw = response.choices[0]?.message?.content ?? '{}';
-  const parsed = JSON.parse(raw) as GeneratedContent;
+  if (containsBannedPhrase(caption, HARD_BANNED_CAPTION_PHRASES)) {
+    throw new Error('Caption contained banned marketing fluff.');
+  }
 
   return {
-    headline:    parsed.headline    ?? '',
-    angle:       parsed.angle       ?? '',
-    imagePrompt: parsed.imagePrompt ?? '',
-    caption:     parsed.caption     ?? '',
+    headline,
+    subheadline: subheadline || undefined,
+    cta: cta || undefined,
+    angle,
+    imagePrompt,
+    caption,
+  };
+}
+
+function fallbackContent(bundle: PromptBundle): GeneratedContent {
+  const fallbackHeadlineOptions = [
+    'Find Projects Before They Do',
+    'See New Jobs Near You',
+    'Know Who Is Building First',
+    'More Projects. More Bids. More Money.',
+    'Track New Permits In Miami',
+    'Get Local Construction Jobs Faster',
+  ];
+
+  const fallbackHeadline = randomItem(fallbackHeadlineOptions);
+
+  const fallbackCaption = normalizeLineBreaks(`
+South Florida contractors who see the project first usually get the first shot at the work.
+
+Builders Bid Book helps you track local construction activity, permits, and project opportunities so you can move faster than your competition.
+
+If you want more bids and more work, you need better local information. buildersbidbook.com
+
+#ContractorLife #SouthFlorida #ConstructionIndustry #BuildersLife #MiamiConstruction #GeneralContractor #Subcontractor #ConstructionBusiness #BuildersBidBook #FloridaConstruction
+  `);
+
+  const fallbackPrompt = normalizeLineBreaks(`
+${bundle.scene.description}. 
+Square 1:1 social-media ad composition. 
+Premium bright editorial construction photography. 
+South Florida feel with vivid blue sky, palm trees, strong daylight, crisp details, clean premium visual hierarchy. 
+Keep the strongest visual weight in the upper 60% of the frame. 
+${bundle.scene.layoutHint}. 
+${buildPeopleRule(bundle.scene)} 
+No text, no words, no logos, no watermarks, no signage.
+  `);
+
+  return {
+    headline: fallbackHeadline,
+    subheadline: 'South Florida construction intelligence',
+    cta: 'buildersbidbook.com',
+    angle: bundle.hook.angle,
+    imagePrompt: fallbackPrompt,
+    caption: fallbackCaption,
   };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Generate image via DALL-E 3
-// Returns the temporary DALL-E URL — caller should stamp + save locally
+// MAIN CONTENT GENERATOR
 // ─────────────────────────────────────────────────────────────────────────────
+
+export async function generateInstagramContent(
+  previousPosts: PreviousPost[]
+): Promise<GeneratedContent> {
+  const openai = getOpenAI();
+  const bundle = pickPromptBundle();
+  const previousContext = buildPreviousContext(previousPosts);
+
+  const systemPrompt = `
+You are an elite direct-response Instagram creative strategist for Builders Bid Book.
+
+${BBB_BRAND_CONTEXT}
+
+YOUR JOB:
+Generate ONE high-converting Instagram post concept for Builders Bid Book.
+
+This output will be used for:
+1. The on-image headline text
+2. The image generation prompt
+3. The Instagram caption
+4. Memory tracking so future posts do not repeat
+
+GOAL:
+Create a post that feels like a premium paid ad made specifically for contractors in South Florida.
+
+SELECTED STRATEGIC DIRECTION FOR THIS GENERATION:
+- Core angle: ${bundle.hook.angle}
+- Intent: ${bundle.hook.intent}
+- Emotional driver: ${bundle.hook.emotionalDriver}
+- Market focus: ${bundle.marketFocus}
+- Direction note: ${bundle.detailLine}
+
+SCENE TO USE FOR THE IMAGE:
+- Scene ID: ${bundle.scene.id}
+- Scene label: ${bundle.scene.label}
+- Scene category: ${bundle.scene.category}
+- Required scene: ${bundle.scene.description}
+- Layout note: ${bundle.scene.layoutHint}
+- People rule: ${buildPeopleRule(bundle.scene)}
+
+STRICT OUTPUT RULES:
+
+1. HEADLINE
+- Max 7 words
+- Must be simple enough to understand in under 2 seconds
+- No metaphors
+- No idioms
+- No slang that reduces clarity
+- No cute wordplay
+- Must feel direct, strong, contractor-focused
+- Prefer plain action words and concrete nouns
+- Examples of style:
+  - Find Projects Before They Do
+  - See New Jobs Near You
+  - Track New Permits In Miami
+  - More Bids. More Work. More Money.
+  - Know Who Is Building First
+
+2. SUBHEADLINE
+- Optional
+- Max 8 words
+- Supports the headline without repeating it
+- Should feel like ad support copy
+- Example:
+  - South Florida construction intelligence
+  - Local permits and project activity
+  - Owner info and bid opportunities
+
+3. CTA
+- Short
+- Example:
+  - buildersbidbook.com
+  - Link in bio
+  - See local projects now
+
+4. ANGLE
+- Short phrase only
+- Used internally for tracking the concept
+- Example:
+  - competitor FOMO
+  - permit speed advantage
+  - local construction map
+  - owner contact advantage
+
+5. IMAGE_PROMPT
+- This is ONLY the visual background scene prompt
+- Text and logo are added later
+- The AI image must NOT include any readable text or branding
+- Must describe the chosen scene vividly and precisely
+- Must feel bright, premium, bold, sharp, social-media-native
+- Must be a square Instagram ad composition
+- Must preserve open space for text overlay
+- Must feel South Florida: tropical daylight, vivid sky, clean brightness
+- NOT cinematic
+- NOT moody
+- NOT dark luxury
+- NOT grunge
+- NOT posterized
+- NOT AI fantasy
+- NOT dramatic shadows
+- Must explicitly say:
+  - no text
+  - no logos
+  - no watermarks
+- If the scene allows people, obey the people rule exactly
+
+6. CAPTION
+- 3 to 5 short sentences maximum before hashtags
+- Each sentence on its own line or separated clearly for readability
+- First sentence must be a bold direct statement, not a question
+- Second sentence should add local specificity or practical value
+- Third sentence should position Builders Bid Book as the solution
+- Final line should include a CTA like buildersbidbook.com or Link in bio
+- Tone must feel like contractor psychology, not generic social media fluff
+- No exaggerated fake numbers
+- No cheesy motivational copy
+- No startup/corporate jargon
+- End with 8 to 10 strong hashtags
+
+ADDITIONAL RULES:
+- Avoid repeating the exact structure or wording from previous examples
+- Avoid these headline phrases: ${HARD_BANNED_HEADLINE_PHRASES.join(', ')}
+- Avoid these caption phrases: ${HARD_BANNED_CAPTION_PHRASES.join(', ')}
+- Use direct contractor language
+- Make this feel expensive, powerful, and clear
+
+${previousContext}
+
+Return ONLY valid JSON:
+{
+  "headline": "string",
+  "subheadline": "string",
+  "cta": "string",
+  "angle": "string",
+  "imagePrompt": "string",
+  "caption": "string"
+}
+`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content:
+            'Generate a fresh Instagram post for Builders Bid Book. Make it bold, high-converting, local, and clearly different from previous posts.',
+        },
+      ],
+      temperature: 0.95,
+      response_format: { type: 'json_object' },
+    });
+
+    const raw = response.choices[0]?.message?.content ?? '{}';
+    const parsed = JSON.parse(raw) as Partial<GeneratedContent>;
+    return validateGeneratedContent(parsed);
+  } catch (error) {
+    console.error('[generateInstagramContent] Falling back after generation error:', error);
+    return fallbackContent(bundle);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IMAGE PROMPT ENHANCER
+// This final pass sharpens the image prompt before sending it to the image model
+// ─────────────────────────────────────────────────────────────────────────────
+
+function enhanceImagePrompt(imagePrompt: string): string {
+  const parts = [
+    imagePrompt,
+    'Instagram 1:1 composition.',
+    'Premium bright editorial ad image.',
+    'Flat, clean, modern, bold visual style.',
+    'South Florida / Miami daylight feel.',
+    'Vivid blue sky, tropical brightness, clean contrast, sharp detail.',
+    'Designed to support large bold overlay text in post-processing.',
+    'Keep lower-left area visually clean for headline placement.',
+    'No text, no words, no readable signs, no logos, no watermarks.',
+    'No dark mood, no cinematic lighting, no grunge, no fantasy, no dramatic shadows.',
+    'High quality, premium marketing creative, polished, crisp, social-media ad ready.',
+  ];
+
+  return collapseWhitespace(parts.join(' '));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IMAGE GENERATOR
+// Returns temporary image URL
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function generateInstagramImage(imagePrompt: string): Promise<string> {
   const openai = getOpenAI();
+  const finalPrompt = enhanceImagePrompt(imagePrompt);
 
-  // Append style enforcement
-  const finalPrompt = [
-    imagePrompt,
-    'Professional editorial photography. Bright, vibrant, well-lit. South Florida / Miami feel. Magazine cover quality.',
-    'If any person appears: show only from behind or side with no face visible, wearing a hard hat and work clothes — generic, no identifiable features.',
-    'NO text, NO words, NO readable signs, NO logos, NO watermarks anywhere in the image.',
-    'Square 1:1 format. Ultra-sharp. High resolution.',
-  ].join(' ');
+  try {
+    const response = await openai.images.generate({
+      model: 'dall-e-3',
+      prompt: finalPrompt,
+      n: 1,
+      size: '1024x1024',
+      quality: 'standard',
+      style: 'vivid',
+    });
 
-  const response = await openai.images.generate({
-    model: 'dall-e-3',
-    prompt: finalPrompt,
-    n: 1,
-    size: '1024x1024',
-    quality: 'standard',
-    style: 'vivid', // vivid = saturated, punchy colors — good for South Florida photography
-  });
+    const url = response.data?.[0]?.url;
+    return url ?? '';
+  } catch (error) {
+    console.error('[generateInstagramImage] Image generation failed:', error);
+    return '';
+  }
+}
 
-  const url = response.data?.[0]?.url;
-  return url ?? '';
+// ─────────────────────────────────────────────────────────────────────────────
+// OPTIONAL HELPER
+// Generates both text + image URL together if you want one-call workflow later
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function generateInstagramPostPackage(
+  previousPosts: PreviousPost[]
+): Promise<GeneratedContent & { imageUrl: string }> {
+  const content = await generateInstagramContent(previousPosts);
+  const imageUrl = await generateInstagramImage(content.imagePrompt);
+
+  return {
+    ...content,
+    imageUrl,
+  };
 }
