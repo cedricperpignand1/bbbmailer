@@ -50,68 +50,55 @@ function buildTextOverlay(
   const charLen = safeHeadline.length;
 
   // Font size scales down for longer headlines
-  const fontSize = charLen <= 18 ? 96 : charLen <= 28 ? 80 : charLen <= 40 ? 66 : 54;
-  const maxCharsPerLine = Math.floor((imgWidth - 96) / (fontSize * 0.58));
+  const fontSize = charLen <= 18 ? 92 : charLen <= 28 ? 76 : charLen <= 40 ? 62 : 52;
+  const maxCharsPerLine = Math.floor((imgWidth - 96) / (fontSize * 0.56));
   const lines = wrapText(safeHeadline, maxCharsPerLine);
 
-  const lineHeight = Math.round(fontSize * 1.18);
+  const lineHeight = Math.round(fontSize * 1.2);
   const textBlockHeight = lines.length * lineHeight;
 
-  // Gradient band covers bottom ~40% of the image
-  const bandY = Math.round(imgHeight * 0.55);
+  // Gradient band covers bottom ~42% of the image
+  const bandY = Math.round(imgHeight * 0.52);
   const bandH = imgHeight - bandY;
 
-  // Blue accent bar sits just above the first line of text
-  const firstLineY = imgHeight - 72 - textBlockHeight;
-  const accentBarY = firstLineY - 22;
+  // First line of text sits ~70px from the bottom (leaves room for URL label)
+  const firstLineY = imgHeight - 70 - textBlockHeight;
+  const accentBarY = firstLineY - 20;
+
+  // Each text line: render a dark shadow copy offset by 3px, then white on top
+  // This is the librsvg-safe way to get readable text over any background.
+  const shadowElements = lines
+    .map((line, i) => {
+      const y = firstLineY + i * lineHeight;
+      return `<text x="51" y="${y + 3}" font-family="Arial" font-size="${fontSize}" font-weight="bold" fill="black" fill-opacity="0.55">${line}</text>`;
+    })
+    .join('\n');
 
   const textElements = lines
     .map((line, i) => {
       const y = firstLineY + i * lineHeight;
-      return `<text
-        x="48"
-        y="${y}"
-        font-family="'Arial Black','Arial Bold',Arial,sans-serif"
-        font-size="${fontSize}"
-        font-weight="900"
-        fill="white"
-        letter-spacing="-1"
-        paint-order="stroke"
-        stroke="rgba(0,0,0,0.45)"
-        stroke-width="4"
-        stroke-linejoin="round"
-      >${line}</text>`;
+      return `<text x="48" y="${y}" font-family="Arial" font-size="${fontSize}" font-weight="bold" fill="white">${line}</text>`;
     })
     .join('\n');
 
-  const svg = `<svg width="${imgWidth}" height="${imgHeight}" xmlns="http://www.w3.org/2000/svg">
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${imgWidth}" height="${imgHeight}" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="black" stop-opacity="0"/>
-      <stop offset="35%"  stop-color="black" stop-opacity="0.55"/>
-      <stop offset="100%" stop-color="black" stop-opacity="0.88"/>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#000000" stop-opacity="0"/>
+      <stop offset="40%"  stop-color="#000000" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.9"/>
     </linearGradient>
   </defs>
 
-  <!-- Dark gradient band -->
-  <rect x="0" y="${bandY}" width="${imgWidth}" height="${bandH}" fill="url(#band)"/>
+  <rect x="0" y="${bandY}" width="${imgWidth}" height="${bandH}" fill="url(#g)"/>
 
-  <!-- Royal-blue accent bar -->
-  <rect x="48" y="${accentBarY}" width="64" height="6" fill="#1055FF" rx="3"/>
+  <rect x="48" y="${accentBarY}" width="60" height="7" rx="3" fill="#1055FF"/>
 
-  <!-- Headline text lines -->
+  ${shadowElements}
   ${textElements}
 
-  <!-- Website label -->
-  <text
-    x="48"
-    y="${imgHeight - 28}"
-    font-family="Arial,sans-serif"
-    font-size="22"
-    font-weight="600"
-    fill="rgba(255,255,255,0.6)"
-    letter-spacing="2"
-  >BUILDERSBIDBOOK.COM</text>
+  <text x="48" y="${imgHeight - 26}" font-family="Arial" font-size="20" font-weight="bold" fill="white" fill-opacity="0.55">BUILDERSBIDBOOK.COM</text>
 </svg>`;
 
   return Buffer.from(svg);
@@ -148,7 +135,7 @@ export async function stampAndSaveImage(
   // ── 2. Logo (bottom-right corner) ─────────────────────────────────────────
   const hasLogo = fs.existsSync(LOGO_PATH);
   if (hasLogo) {
-    const logoTargetWidth = Math.round(imgWidth * 0.17);
+    const logoTargetWidth = Math.round(imgWidth * 0.23);
     const logoBuffer = await sharp(LOGO_PATH)
       .resize(logoTargetWidth, null, {
         fit: 'contain',

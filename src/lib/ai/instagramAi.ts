@@ -38,14 +38,12 @@ export type GeneratedContent = {
   angle: string;
   imagePrompt: string;
   caption: string;
-  firstComment: string;
 };
 
 type PreviousPost = {
   headline: string;
   angle: string;
   caption: string;
-  firstComment: string;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,7 +73,7 @@ function getOpenAI(): OpenAI {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Generate text content (caption, firstComment, imagePrompt, headline, angle)
+// Generate text content (caption, imagePrompt, headline, angle)
 // ─────────────────────────────────────────────────────────────────────────────
 export async function generateInstagramContent(
   previousPosts: PreviousPost[]
@@ -126,20 +124,20 @@ GENERATION RULES:
    - Square 1:1 composition with the strongest visual element centered or in the upper 60% (lower 40% will have a text overlay so keep it less busy)
    - NO text, NO logos, NO watermarks in the generated image
 
-   CHOOSE ONE of these scene types based on the angle:
-   A) AERIAL/DRONE: Aerial drone shot looking down at a South Florida construction site with foundation poured, rebar grids, concrete forms, surrounding streets and palm trees visible, bright Florida blue sky, vibrant colors, magazine cover quality
-   B) CRANE/SKYLINE: Wide angle ground-up shot of a modern glass and steel high-rise under construction in Miami, tower cranes against a vivid blue sky with white clouds, powerfully composed, architectural photography style
-   C) BLUEPRINT/PLANS: Close-up flat lay of construction blueprints and architectural drawings on a white table, with a yellow hard hat, measuring tape, and pen placed on top, clean studio photography, bright natural light, overhead shot
-   D) BUILDING FRAME: Interior shot looking up through the exposed steel frame of a building under construction, geometric steel beams creating strong lines, bright sky visible through the structure, dramatic composition, professional architectural photography
-   E) SOUTH FLORIDA LOT: Empty construction lot in a South Florida residential neighborhood, blue sky with cumulus clouds, palm trees in background, fresh graded earth, bright sunny day, real estate photography style
-   F) WORKERS PLANNING: Two construction workers from behind (no faces visible) looking out at a large South Florida construction site or city skyline, wearing hard hats and orange safety vests, editorial photography
+   IMPORTANT ABOUT THE BUSINESS: Builders Bid Book is about RESIDENTIAL and small commercial construction — new home builds, townhouses, duplexes, small apartment buildings, additions. NOT skyscrapers. NOT downtown high-rises. Think South Florida neighborhoods, subdivision lots, single-family homes being built, small contractors on job sites.
 
-   Pick the scene type that best matches the post angle. Describe it specifically with:
-   - Exact location feel (Miami, South Florida, tropical)
-   - Lighting (golden hour, bright midday sun, etc.)
-   - Composition details
-   - Photography style (editorial, architectural, drone photography)
-   - "No text, no words, no watermarks in the image"
+   CHOOSE ONE of these scene types — pick whichever fits the post angle best:
+   A) FRESH FOUNDATION: Wide shot of a freshly poured concrete slab on a South Florida residential lot, rebar poking up, wooden forms around the perimeter, palm trees and blue sky in background, bright Florida sunshine, professional real estate photography
+   B) WOOD FRAMING: New home wood framing going up in a South Florida neighborhood, 2x4 stud walls and roof trusses taking shape, workers visible from behind in hard hats, clear blue sky above, warm golden hour lighting, editorial construction photography
+   C) EMPTY LOT: A cleared residential building lot in a South Florida neighborhood with a "permit posted" sign, surrounding homes visible, palm trees, lush green grass, bright sunny day, the kind of lot a subcontractor would want to find first
+   D) BLUEPRINT FLAT LAY: Overhead close-up of residential house blueprints and architectural plans spread on a wooden table, yellow hard hat placed on top, measuring tape, pencil, coffee cup — clean and warm studio lighting, professional real estate photography
+   E) CONTRACTOR MOMENT: A contractor or small crew (seen from behind or side — no faces) reviewing plans on a clipboard while standing in front of a residential home under construction, Florida vegetation visible, authentic job site feel, editorial photography style
+   F) CONCRETE BLOCK WALLS: South Florida-style CBS (concrete block) residential construction in progress — block walls going up, rebar columns, blue sky, palm trees, typical Miami-Dade or Broward residential street, bright midday light
+   G) FINISHED NEW BUILD: A brand-new modern residential home just completed in South Florida — clean stucco exterior, impact windows, paver driveway, tropical landscaping, bright sunny day, real estate listing photography quality
+   H) TOOLS AND TRADE: Close-up still life of contractor tools on a job site — worn leather tool belt, measuring tape, hard hat, permit documents spread on plywood — warm natural light, authentic and gritty, professional editorial photography
+
+   Pick ONE scene. Describe it with specific South Florida details (neighborhood feel, tropical vegetation, Florida sky, warm light). Keep the lower 40% of the composition relatively clean (less busy) since text will overlay there.
+   End with: "No text, no words, no logos, no watermarks anywhere in the image."
 
 4. CAPTION (3-5 sentences):
    - Opens with a bold statement (NOT a question, NOT starting with an emoji)
@@ -149,11 +147,6 @@ GENERATION RULES:
    - Line breaks between sentences for Instagram readability
    - 8-10 relevant hashtags at end
    - Hashtags: #ContractorLife #SouthFlorida #ConstructionIndustry #BuildersLife #MiamiConstruction #GeneralContractor #Subcontractor #ConstructionBusiness #BuildersBidBook #FloridaConstruction
-
-5. FIRST_COMMENT (1-2 sentences max):
-   - Pinned comment for extra reach
-   - Adds urgency, social proof, or teases a specific feature
-   - Feels authentic, not like a bot
 ${previousContext}
 
 Return ONLY valid JSON (no markdown):
@@ -161,8 +154,7 @@ Return ONLY valid JSON (no markdown):
   "headline": "...",
   "angle": "...",
   "imagePrompt": "...",
-  "caption": "...",
-  "firstComment": "..."
+  "caption": "..."
 }`;
 
   const response = await openai.chat.completions.create({
@@ -186,7 +178,6 @@ Return ONLY valid JSON (no markdown):
     angle: parsed.angle ?? '',
     imagePrompt: parsed.imagePrompt ?? '',
     caption: parsed.caption ?? '',
-    firstComment: parsed.firstComment ?? '',
   };
 }
 

@@ -10,7 +10,6 @@ type GeneratedPost = {
   headline: string;
   angle: string;
   caption: string;
-  firstComment: string;
   imagePrompt: string;
 };
 
@@ -169,7 +168,6 @@ export default function InstagramAiPage() {
         headline: data.headline,
         angle: data.angle,
         caption: data.caption,
-        firstComment: data.firstComment,
         imagePrompt: data.imagePrompt ?? "",
       });
 
@@ -339,19 +337,6 @@ export default function InstagramAiPage() {
                 </pre>
               </div>
 
-              {/* First Comment */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-2 w-2 rounded-full bg-purple-500" />
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">First Comment</span>
-                    <span className="text-xs text-slate-400">(pin this)</span>
-                  </div>
-                  <CopyButton text={post.firstComment} label="Copy comment" />
-                </div>
-                <p className="text-sm text-slate-700 leading-relaxed">{post.firstComment}</p>
-              </div>
-
               {/* Image prompt (collapsed reference) */}
               <details className="group rounded-2xl border border-slate-100 bg-slate-50">
                 <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-slate-500 list-none flex items-center justify-between hover:text-slate-700">
@@ -373,7 +358,6 @@ export default function InstagramAiPage() {
                   "Download image (logo already stamped on it)",
                   "Copy caption and paste into Instagram",
                   "Post the image",
-                  "Immediately post first comment and pin it",
                 ].map((step, i) => (
                   <div key={i} className="flex items-start gap-2 text-xs text-emerald-700">
                     <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-200 font-bold text-emerald-800">
