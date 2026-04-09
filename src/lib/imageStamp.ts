@@ -1,32 +1,57 @@
 import sharp from 'sharp';
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import path from 'path';
 import fs from 'fs';
 
 const LOGO_PATH = path.join(process.cwd(), 'public', 'bbb-logo.png');
+const CUSTOM_FONT_PATH = path.join(process.cwd(), 'public', 'fonts', 'inter-bold.ttf');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Escape XML special chars so SVG text doesn't break
+// Load fonts once at startup.
+// If the user drops public/fonts/inter-bold.ttf it will be used for crisp text.
+// Otherwise falls back to system fonts (works on Windows/Mac, and on Linux/
+// Vercel Skia has a built-in Latin fallback so basic text still renders).
 // ─────────────────────────────────────────────────────────────────────────────
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+let fontsReady = false;
+function ensureFonts() {
+  if (fontsReady) return;
+  if (fs.existsSync(CUSTOM_FONT_PATH)) {
+    GlobalFonts.registerFromPath(CUSTOM_FONT_PATH, 'BBBFont');
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  try { (GlobalFonts as any).loadSystemFonts(); } catch { /* unavailable on some envs */ }
+  fontsReady = true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Wrap headline into lines that fit within the image at the given font size
+// Strip non-printable / non-ASCII chars that would render as boxes.
+// GPT-4o often outputs smart quotes, em-dashes, etc.
 // ─────────────────────────────────────────────────────────────────────────────
-function wrapText(text: string, maxCharsPerLine: number, maxLines = 3): string[] {
+function sanitize(text: string): string {
+  return text
+    .toUpperCase()
+    .replace(/[\u201C\u201D]/g, '"')   // smart double quotes
+    .replace(/[\u2018\u2019]/g, "'")   // smart single quotes
+    .replace(/[\u2014\u2013]/g, '-')   // em / en dash
+    .replace(/\u2026/g, '...')         // ellipsis
+    .replace(/[^\x20-\x7E]/g, '');    // strip everything else outside printable ASCII
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Word-wrap text to fit within maxWidth px given the current canvas context.
+// ─────────────────────────────────────────────────────────────────────────────
+function wrapLines(
+  ctx: { measureText(t: string): { width: number } },
+  text: string,
+  maxWidth: number,
+  maxLines = 3
+): string[] {
   const words = text.split(' ');
   const lines: string[] = [];
   let current = '';
-
   for (const word of words) {
     const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length <= maxCharsPerLine) {
+    if (ctx.measureText(candidate).width <= maxWidth) {
       current = candidate;
     } else {
       if (current) lines.push(current);
@@ -38,125 +63,119 @@ function wrapText(text: string, maxCharsPerLine: number, maxLines = 3): string[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Build the SVG overlay: dark gradient band + blue accent line + headline text
-// + buildersbidbook.com label at the bottom
+// Draw the text overlay onto a transparent canvas and return as PNG buffer.
+// Layout: dark gradient band → blue accent bar → bold headline → URL label
 // ─────────────────────────────────────────────────────────────────────────────
-function buildTextOverlay(
-  headline: string,
-  imgWidth: number,
-  imgHeight: number
-): Buffer {
-  const safeHeadline = escapeXml(headline.toUpperCase());
-  const charLen = safeHeadline.length;
+function buildTextOverlay(headline: string, imgWidth: number, imgHeight: number): Buffer {
+  ensureFonts();
 
-  // Font size scales down for longer headlines
-  const fontSize = charLen <= 18 ? 92 : charLen <= 28 ? 76 : charLen <= 40 ? 62 : 52;
-  const maxCharsPerLine = Math.floor((imgWidth - 96) / (fontSize * 0.56));
-  const lines = wrapText(safeHeadline, maxCharsPerLine);
+  const text = sanitize(headline);
+  const fontFamily = fs.existsSync(CUSTOM_FONT_PATH)
+    ? '"BBBFont", sans-serif'
+    : 'sans-serif';
+  const maxTextWidth = imgWidth - 96;
 
-  const lineHeight = Math.round(fontSize * 1.2);
-  const textBlockHeight = lines.length * lineHeight;
+  const canvas = createCanvas(imgWidth, imgHeight);
+  const ctx = canvas.getContext('2d');
 
-  // Gradient band covers bottom ~42% of the image
+  // ── Auto-size font so the headline always fits ──────────────────────────
+  let fontSize = 88;
+  let lines: string[] = [];
+  while (fontSize >= 42) {
+    ctx.font = `bold ${fontSize}px ${fontFamily}`;
+    lines = wrapLines(ctx, text, maxTextWidth);
+    const fits = lines.every(l => ctx.measureText(l).width <= maxTextWidth);
+    if (fits) break;
+    fontSize -= 4;
+  }
+
+  const lineHeight = Math.round(fontSize * 1.22);
+  const textBlockH = lines.length * lineHeight;
+
+  // ── Dark gradient (bottom ~45% of image) ───────────────────────────────
   const bandY = Math.round(imgHeight * 0.52);
-  const bandH = imgHeight - bandY;
+  const grad = ctx.createLinearGradient(0, bandY, 0, imgHeight);
+  grad.addColorStop(0,    'rgba(0,0,0,0)');
+  grad.addColorStop(0.35, 'rgba(0,0,0,0.58)');
+  grad.addColorStop(1,    'rgba(0,0,0,0.92)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, bandY, imgWidth, imgHeight - bandY);
 
-  // First line of text sits ~70px from the bottom (leaves room for URL label)
-  const firstLineY = imgHeight - 70 - textBlockHeight;
-  const accentBarY = firstLineY - 20;
+  // ── Blue accent bar above the text ─────────────────────────────────────
+  const firstLineY = imgHeight - 72 - textBlockH;
+  ctx.fillStyle = '#1055FF';
+  ctx.fillRect(48, firstLineY - 24, 64, 7);
 
-  // Each text line: render a dark shadow copy offset by 3px, then white on top
-  // This is the librsvg-safe way to get readable text over any background.
-  const shadowElements = lines
-    .map((line, i) => {
-      const y = firstLineY + i * lineHeight;
-      return `<text x="51" y="${y + 3}" font-family="Arial" font-size="${fontSize}" font-weight="bold" fill="black" fill-opacity="0.55">${line}</text>`;
-    })
-    .join('\n');
+  // ── Headline text: shadow pass then white ───────────────────────────────
+  ctx.font = `bold ${fontSize}px ${fontFamily}`;
+  for (let i = 0; i < lines.length; i++) {
+    const x = 48;
+    const y = firstLineY + i * lineHeight;
+    // soft drop shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillText(lines[i], x + 3, y + 3);
+    // white headline
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(lines[i], x, y);
+  }
 
-  const textElements = lines
-    .map((line, i) => {
-      const y = firstLineY + i * lineHeight;
-      return `<text x="48" y="${y}" font-family="Arial" font-size="${fontSize}" font-weight="bold" fill="white">${line}</text>`;
-    })
-    .join('\n');
+  // ── Website label at the very bottom ────────────────────────────────────
+  ctx.font = `600 20px ${fontFamily}`;
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText('BUILDERSBIDBOOK.COM', 48, imgHeight - 26);
 
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${imgWidth}" height="${imgHeight}" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#000000" stop-opacity="0"/>
-      <stop offset="40%"  stop-color="#000000" stop-opacity="0.6"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.9"/>
-    </linearGradient>
-  </defs>
-
-  <rect x="0" y="${bandY}" width="${imgWidth}" height="${bandH}" fill="url(#g)"/>
-
-  <rect x="48" y="${accentBarY}" width="60" height="7" rx="3" fill="#1055FF"/>
-
-  ${shadowElements}
-  ${textElements}
-
-  <text x="48" y="${imgHeight - 26}" font-family="Arial" font-size="20" font-weight="bold" fill="white" fill-opacity="0.55">BUILDERSBIDBOOK.COM</text>
-</svg>`;
-
-  return Buffer.from(svg);
+  return canvas.toBuffer('image/png');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main export:
 // 1. Fetch DALL-E image
-// 2. Composite headline text overlay
-// 3. Composite BBB logo (if public/bbb-logo.png exists)
-// 4. Return base64 data URL — no filesystem writes needed
+// 2. Canvas text overlay (gradient + headline + URL)
+// 3. BBB logo bottom-right (if public/bbb-logo.png exists)
+// 4. Return base64 data URL
 // ─────────────────────────────────────────────────────────────────────────────
 export async function stampAndSaveImage(
   dalleUrl: string,
   headline: string
 ): Promise<string> {
-  // Fetch DALL-E image
   const res = await fetch(dalleUrl);
   if (!res.ok) throw new Error(`Failed to fetch DALL-E image: ${res.status}`);
   const imageBuffer = Buffer.from(await res.arrayBuffer());
 
   const metadata = await sharp(imageBuffer).metadata();
-  const imgWidth = metadata.width ?? 1024;
+  const imgWidth  = metadata.width  ?? 1024;
   const imgHeight = metadata.height ?? 1024;
 
   const composites: sharp.OverlayOptions[] = [];
 
-  // ── 1. Text overlay ────────────────────────────────────────────────────────
+  // ── Text overlay ────────────────────────────────────────────────────────
   if (headline.trim()) {
-    const textSvg = buildTextOverlay(headline, imgWidth, imgHeight);
-    composites.push({ input: textSvg, top: 0, left: 0 });
+    const textPng = buildTextOverlay(headline, imgWidth, imgHeight);
+    composites.push({ input: textPng, top: 0, left: 0 });
   }
 
-  // ── 2. Logo (bottom-right corner) ─────────────────────────────────────────
-  const hasLogo = fs.existsSync(LOGO_PATH);
-  if (hasLogo) {
-    const logoTargetWidth = Math.round(imgWidth * 0.23);
+  // ── Logo (bottom-right) ─────────────────────────────────────────────────
+  if (fs.existsSync(LOGO_PATH)) {
+    const logoW = Math.round(imgWidth * 0.23);
     const logoBuffer = await sharp(LOGO_PATH)
-      .resize(logoTargetWidth, null, {
+      .resize(logoW, null, {
         fit: 'contain',
         background: { r: 0, g: 0, b: 0, alpha: 0 },
       })
       .png()
       .toBuffer();
 
-    const logoMeta = await sharp(logoBuffer).metadata();
-    const logoHeight = logoMeta.height ?? 60;
+    const logoH = (await sharp(logoBuffer).metadata()).height ?? 60;
     const margin = Math.round(imgWidth * 0.03);
 
     composites.push({
       input: logoBuffer,
-      left: imgWidth - logoTargetWidth - margin,
-      top: imgHeight - logoHeight - margin,
+      left: imgWidth - logoW - margin,
+      top:  imgHeight - logoH - margin,
       blend: 'over',
     });
   }
 
-  // ── 3. Composite all layers and return base64 ─────────────────────────────
   const outputBuffer = await sharp(imageBuffer)
     .composite(composites)
     .jpeg({ quality: 93 })
