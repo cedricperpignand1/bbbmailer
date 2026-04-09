@@ -116,17 +116,30 @@ GENERATION RULES:
    - Example: "competitor FOMO" or "platform UI mockup" or "permits data urgency"
 
 3. IMAGE_PROMPT (for DALL-E 3 — follow these rules EXACTLY):
-   VISUAL STYLE RULES — THIS IS CRITICAL:
-   - Background: BRIGHT VIVID ROYAL BLUE (like cobalt blue, electric blue) OR clean white. NEVER dark. NEVER navy. NEVER black.
-   - Style: FLAT GRAPHIC DESIGN. Clean. Canva-style marketing poster. NOT photorealistic. NOT cinematic. NOT dark/moody.
-   - Typography in image: Ultra-bold, heavy sans-serif, white text on blue OR blue text on white. Massive scale. The text is the hero element.
-   - Acceptable visual elements: flat/illustrated construction icons, simple geometric shapes, a clean mockup card showing a project address and value, minimal clean layout
-   - Color palette: vivid bright royal blue + white. Optional small orange/yellow accent.
-   - Format: square 1:1, Instagram post size
-   - Quality: sharp, crisp, clean edges — like a professionally designed Canva template
-   - DO NOT generate: dark backgrounds, dramatic photography, cinematic lighting, photorealistic construction sites, shadowy or moody images
-   - DO generate: clean bold typography layouts, bright blue flat design, infographic-style, bold marketing poster style
-   - Example of what to generate: "Bold flat design poster with vivid royal blue background, massive white ultra-bold sans-serif text saying '[headline]' in center, clean minimal layout, small orange accent line, professional Instagram marketing creative, square format"
+   THE IMAGE IS A BACKGROUND SCENE ONLY. Text and logo are added separately — do NOT include any text or words in the image.
+
+   VISUAL STYLE:
+   - Professional editorial/magazine photography — like Architectural Digest meets a construction trade magazine
+   - Bright, clean, well-lit — NOT dark, NOT moody, NOT night shots
+   - South Florida vibes: blue skies, palm trees in the background, tropical daylight
+   - High contrast, sharp details, professional photography quality
+   - Square 1:1 composition with the strongest visual element centered or in the upper 60% (lower 40% will have a text overlay so keep it less busy)
+   - NO text, NO logos, NO watermarks in the generated image
+
+   CHOOSE ONE of these scene types based on the angle:
+   A) AERIAL/DRONE: Aerial drone shot looking down at a South Florida construction site with foundation poured, rebar grids, concrete forms, surrounding streets and palm trees visible, bright Florida blue sky, vibrant colors, magazine cover quality
+   B) CRANE/SKYLINE: Wide angle ground-up shot of a modern glass and steel high-rise under construction in Miami, tower cranes against a vivid blue sky with white clouds, powerfully composed, architectural photography style
+   C) BLUEPRINT/PLANS: Close-up flat lay of construction blueprints and architectural drawings on a white table, with a yellow hard hat, measuring tape, and pen placed on top, clean studio photography, bright natural light, overhead shot
+   D) BUILDING FRAME: Interior shot looking up through the exposed steel frame of a building under construction, geometric steel beams creating strong lines, bright sky visible through the structure, dramatic composition, professional architectural photography
+   E) SOUTH FLORIDA LOT: Empty construction lot in a South Florida residential neighborhood, blue sky with cumulus clouds, palm trees in background, fresh graded earth, bright sunny day, real estate photography style
+   F) WORKERS PLANNING: Two construction workers from behind (no faces visible) looking out at a large South Florida construction site or city skyline, wearing hard hats and orange safety vests, editorial photography
+
+   Pick the scene type that best matches the post angle. Describe it specifically with:
+   - Exact location feel (Miami, South Florida, tropical)
+   - Lighting (golden hour, bright midday sun, etc.)
+   - Composition details
+   - Photography style (editorial, architectural, drone photography)
+   - "No text, no words, no watermarks in the image"
 
 4. CAPTION (3-5 sentences):
    - Opens with a bold statement (NOT a question, NOT starting with an emoji)
@@ -184,14 +197,13 @@ Return ONLY valid JSON (no markdown):
 export async function generateInstagramImage(imagePrompt: string): Promise<string> {
   const openai = getOpenAI();
 
-  // Append style enforcement — always push toward bright flat design
+  // Append style enforcement
   const finalPrompt = [
     imagePrompt,
-    'IMPORTANT: vivid bright royal blue background or clean white background ONLY.',
-    'Flat graphic design style, NOT photorealistic, NOT dark, NOT cinematic.',
-    'Ultra-bold heavy sans-serif typography as the main visual element.',
-    'Clean professional marketing poster aesthetic.',
-    'Square 1:1 format. Crisp sharp edges. No watermarks.',
+    'Professional editorial photography. Bright, vibrant, well-lit.',
+    'South Florida / Miami feel. Magazine cover quality.',
+    'NO text, NO words, NO logos, NO watermarks anywhere in the image.',
+    'Square 1:1 format. Ultra-sharp. High resolution.',
   ].join(' ');
 
   const response = await openai.images.generate({
@@ -200,7 +212,7 @@ export async function generateInstagramImage(imagePrompt: string): Promise<strin
     n: 1,
     size: '1024x1024',
     quality: 'standard',
-    style: 'natural', // 'natural' gives cleaner flat design vs 'vivid' which is dramatic
+    style: 'vivid', // vivid = saturated, punchy colors — good for South Florida photography
   });
 
   const url = response.data?.[0]?.url;

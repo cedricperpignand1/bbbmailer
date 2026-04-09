@@ -47,7 +47,7 @@ export async function POST() {
     // ── 4. Download, stamp logo, save locally ────────────────────────────────
     // Returns a stable local path like /ig-ai/post-1234567890.jpg
     // This never expires, unlike the raw DALL-E URL.
-    const localImagePath = await stampAndSaveImage(dalleUrl);
+    const localImagePath = await stampAndSaveImage(dalleUrl, content.headline);
 
     // ── 5. Save text content to DB for anti-repetition memory ────────────────
     await prisma.igAiPost.create({
