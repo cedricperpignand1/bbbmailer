@@ -47,6 +47,28 @@ type PreviousPost = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Scene bank — one is selected at random in code so DALL-E varies every time
+// ─────────────────────────────────────────────────────────────────────────────
+const SCENE_BANK: Record<string, string> = {
+  A: 'FRESH FOUNDATION: Freshly poured concrete slab on a South Florida residential lot, rebar grid, wooden forms at the perimeter, palm trees and bright blue sky behind, Florida sunshine, no workers in frame',
+  B: 'WOOD FRAMING: New home wood frame going up in a South Florida neighborhood, stud walls and roof trusses, one worker seen from behind in a hard hat, golden hour side lighting, warm tones',
+  C: 'EMPTY LOT: Cleared residential lot in a South Florida neighborhood, surrounding homes visible, a hand-painted "FOR SALE" stake in the foreground, palm trees, bright sunny day',
+  D: 'BLUEPRINT FLAT LAY: Overhead close-up of large architectural blueprints spread on a table, yellow hard hat resting on one corner, measuring tape, pencil, warm studio lighting, no other objects',
+  E: 'CONTRACTOR REVIEWING PLANS: Contractor seen from behind, reviewing plans on a clipboard in front of a half-built stucco home, South Florida tropical vegetation, soft morning light',
+  F: 'CBS BLOCK WALLS: Concrete block masonry walls rising on a residential site, exposed rebar columns, blue sky, palm trees along the street, typical Miami-Dade residential block, bright midday',
+  G: 'FINISHED NEW BUILD: Brand-new modern stucco home, white exterior, impact windows, paver driveway, tropical landscaping, real estate listing quality photography, no cars or people',
+  H: 'TOOLS FLAT LAY: Tool belt, hard hat, folded permit documents, and measuring tape arranged on rough plywood — warm editorial photography, shallow depth of field, construction textures',
+  I: 'AERIAL NEIGHBORHOOD: Drone view looking straight down at a South Florida residential neighborhood — streets, rooftops, yards, two homes visibly mid-construction, green palm canopy scattered throughout',
+  J: 'EXCAVATOR ON LOT: Yellow excavator clearing a residential South Florida lot for new construction, freshly turned red soil, palm trees at the property edge, bright blue sky, high-energy job site',
+  K: 'PERMIT SIGN: Close-up of an official building permit posted on a stake in front of a South Florida property, bokeh residential street and palm trees in the background, golden hour light, warm glow',
+  L: 'CONTRACTOR WITH TABLET: Contractor seen from the side (no face visible) holding a tablet on an active job site, hard hat on, looking at plans, South Florida residential street behind, clean professional feel',
+  M: 'CONCRETE POUR: Concrete truck chute actively pouring concrete into forms on a residential South Florida lot, construction workers in hard hats visible from behind, dramatic action shot, blue sky',
+  N: 'ROOFING CREW: Roofing crew seen from below working on a new home, underlayment being rolled out, tropical sky above, palm tree tips visible, strong upward angle, warm light',
+  O: 'IMPACT WINDOWS INSTALL: Two workers installing large impact-resistant windows into a new stucco home, ladders, South Florida residential street, bright daylight, modern construction',
+  P: 'ELECTRICAL ROUGH-IN: Interior of a home under construction, exposed stud walls, electrical conduit and junction boxes visible, clean and organized rough-in work, warm work-light atmosphere',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Angle bank — ensures diversity across generations
 // ─────────────────────────────────────────────────────────────────────────────
 const ANGLE_BANK = [
@@ -93,6 +115,11 @@ export async function generateInstagramContent(
 
   const suggestedAngle = ANGLE_BANK[Math.floor(Math.random() * ANGLE_BANK.length)];
 
+  // Pick scene in code so DALL-E gets true variety — NOT left to the AI
+  const sceneKeys = Object.keys(SCENE_BANK);
+  const chosenSceneKey = sceneKeys[Math.floor(Math.random() * sceneKeys.length)];
+  const chosenScene = SCENE_BANK[chosenSceneKey];
+
   const systemPrompt = `You are an elite Instagram marketing strategist for Builders Bid Book — a construction intelligence platform for South Florida contractors.
 
 ${BBB_BRAND_CONTEXT}
@@ -116,31 +143,20 @@ GENERATION RULES:
 3. IMAGE_PROMPT (for DALL-E 3 — follow these rules EXACTLY):
    THE IMAGE IS A BACKGROUND SCENE ONLY. Text and logo are added separately — do NOT include any text or words in the image.
 
-   VISUAL STYLE:
+   MANDATORY SCENE — you MUST use exactly this scene, no substitutions:
+   "${chosenScene}"
+
+   VISUAL STYLE REQUIREMENTS:
    - Professional editorial/magazine photography — like Architectural Digest meets a construction trade magazine
    - Bright, clean, well-lit — NOT dark, NOT moody, NOT night shots
    - South Florida vibes: blue skies, palm trees in the background, tropical daylight
    - High contrast, sharp details, professional photography quality
    - Square 1:1 composition with the strongest visual element centered or in the upper 60% (lower 40% will have a text overlay so keep it less busy)
    - NO text, NO logos, NO watermarks in the generated image
+   - NOT skyscrapers — residential or small commercial only
 
-   IMPORTANT: BBB is about residential and small commercial construction — permits, new home builds, townhouses, small apartment buildings. NOT skyscrapers.
-
-   CHOOSE ONE scene — rotate for variety, pick what fits the angle:
-   A) FRESH FOUNDATION: Freshly poured concrete slab on a South Florida residential lot, rebar grid, wooden forms, palm trees and blue sky, bright Florida sunshine
-   B) WOOD FRAMING: New home framing going up in a South Florida neighborhood, stud walls and roof trusses, workers from behind in hard hats, golden hour lighting
-   C) EMPTY LOT: Cleared residential lot in a South Florida neighborhood, palm trees, surrounding homes visible, bright sunny day — the kind of lot a contractor wants to find first
-   D) BLUEPRINT FLAT LAY: Overhead close-up of blueprints on a table, yellow hard hat, measuring tape, pencil — warm studio lighting, clean composition
-   E) CONTRACTOR REVIEWING PLANS: Contractor seen from behind, reviewing plans on clipboard in front of a home under construction, South Florida vegetation
-   F) CBS BLOCK WALLS: Concrete block residential walls going up, rebar columns, blue sky, palm trees, typical Miami-Dade street, bright midday
-   G) FINISHED NEW BUILD: Brand-new modern stucco home, impact windows, paver driveway, tropical landscaping, real estate listing quality photography
-   H) TOOLS FLAT LAY: Tool belt, hard hat, permit documents, measuring tape on plywood — warm authentic editorial photography
-   I) AERIAL NEIGHBORHOOD: Drone view looking down at a South Florida neighborhood — streets, rooftops, yards, a couple homes visibly under construction, shows active development from above
-   J) EXCAVATOR ON LOT: Yellow excavator on a residential South Florida lot clearing land for new construction, palm trees, blue sky, authentic job site energy
-   K) PERMIT SIGN: Close-up of a building permit posted on a stake in front of a South Florida property, bokeh residential street and palm trees in background, golden hour
-   L) CONTRACTOR WITH TABLET: Contractor (from side, no face visible) holding a tablet on a job site looking at data, hard hat on, modern professional feel, South Florida residential street
-
-   Pick ONE. Keep the bottom-left area of the composition clean — headline text overlays there.
+   Write the imagePrompt as a detailed, vivid description of ONLY this scene.
+   Keep the bottom-left area of the composition open/clean — headline text overlays there.
    End with: "No text, no words, no watermarks in the image."
 
 4. CAPTION (3-5 sentences):
