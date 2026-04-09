@@ -47,25 +47,39 @@ type PreviousPost = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scene bank — one is selected at random in code so DALL-E varies every time
+// Scene bank — one is selected at random in code so DALL-E varies every time.
+// When people appear they must be from behind or side only — no face, no
+// identifiable features. Variety across construction, data, aerial, design.
 // ─────────────────────────────────────────────────────────────────────────────
 const SCENE_BANK: Record<string, string> = {
-  A: 'FRESH FOUNDATION: Freshly poured concrete slab on a South Florida residential lot, rebar grid, wooden forms at the perimeter, palm trees and bright blue sky behind, Florida sunshine, no workers in frame',
-  B: 'WOOD FRAMING: New home wood frame going up in a South Florida neighborhood, stud walls and roof trusses, one worker seen from behind in a hard hat, golden hour side lighting, warm tones',
-  C: 'EMPTY LOT: Cleared residential lot in a South Florida neighborhood, surrounding homes visible, a hand-painted "FOR SALE" stake in the foreground, palm trees, bright sunny day',
-  D: 'BLUEPRINT FLAT LAY: Overhead close-up of large architectural blueprints spread on a table, yellow hard hat resting on one corner, measuring tape, pencil, warm studio lighting, no other objects',
-  E: 'CONTRACTOR REVIEWING PLANS: Contractor seen from behind, reviewing plans on a clipboard in front of a half-built stucco home, South Florida tropical vegetation, soft morning light',
-  F: 'CBS BLOCK WALLS: Concrete block masonry walls rising on a residential site, exposed rebar columns, blue sky, palm trees along the street, typical Miami-Dade residential block, bright midday',
-  G: 'FINISHED NEW BUILD: Brand-new modern stucco home, white exterior, impact windows, paver driveway, tropical landscaping, real estate listing quality photography, no cars or people',
-  H: 'TOOLS FLAT LAY: Tool belt, hard hat, folded permit documents, and measuring tape arranged on rough plywood — warm editorial photography, shallow depth of field, construction textures',
-  I: 'AERIAL NEIGHBORHOOD: Drone view looking straight down at a South Florida residential neighborhood — streets, rooftops, yards, two homes visibly mid-construction, green palm canopy scattered throughout',
-  J: 'EXCAVATOR ON LOT: Yellow excavator clearing a residential South Florida lot for new construction, freshly turned red soil, palm trees at the property edge, bright blue sky, high-energy job site',
-  K: 'PERMIT SIGN: Close-up of an official building permit posted on a stake in front of a South Florida property, bokeh residential street and palm trees in the background, golden hour light, warm glow',
-  L: 'CONTRACTOR WITH TABLET: Contractor seen from the side (no face visible) holding a tablet on an active job site, hard hat on, looking at plans, South Florida residential street behind, clean professional feel',
-  M: 'CONCRETE POUR: Concrete truck chute actively pouring concrete into forms on a residential South Florida lot, construction workers in hard hats visible from behind, dramatic action shot, blue sky',
-  N: 'ROOFING CREW: Roofing crew seen from below working on a new home, underlayment being rolled out, tropical sky above, palm tree tips visible, strong upward angle, warm light',
-  O: 'IMPACT WINDOWS INSTALL: Two workers installing large impact-resistant windows into a new stucco home, ladders, South Florida residential street, bright daylight, modern construction',
-  P: 'ELECTRICAL ROUGH-IN: Interior of a home under construction, exposed stud walls, electrical conduit and junction boxes visible, clean and organized rough-in work, warm work-light atmosphere',
+  // ── Construction job site ─────────────────────────────────────────────────
+  A: 'FRESH FOUNDATION: Freshly poured concrete slab on a South Florida residential lot, rebar grid, wooden forms at the perimeter, palm trees and bright blue sky, Florida sunshine, no people in frame',
+  B: 'WOOD FRAMING: New home wood frame going up in a South Florida neighborhood, stud walls and roof trusses, one or two workers seen fully from behind wearing hard hats and work clothes — no faces visible, golden hour warm light',
+  C: 'CBS BLOCK WALLS: Concrete block masonry walls rising on a residential site, exposed rebar columns, blue sky, palm trees along the street, typical Miami-Dade block, bright midday, no people',
+  D: 'EMPTY LOT: Cleared residential lot ready for construction, surrounding stucco homes visible, fresh gravel and surveyor stakes, palm trees, bright sunny South Florida day, no people',
+  E: 'EXCAVATOR ACTIVE: Yellow excavator clearing a residential South Florida lot, freshly turned red soil, palm trees at the property edge, bright blue sky, high-energy job site — operator silhouette in closed cab only if visible, no faces',
+  F: 'CONCRETE POUR: Concrete mixer truck chute pouring concrete into residential forms, two workers seen from behind in hard hats guiding the pour, dramatic South Florida daylight, action shot, no faces',
+  G: 'ROOFTOP ANGLE: Looking up from the ground at the bare roof trusses of a new South Florida home under construction, vivid blue sky and palm fronds framing the shot, strong geometric lines, no people',
+  H: 'FINISHED NEW BUILD: Brand-new modern stucco home, white exterior, large impact windows, paver driveway, lush tropical landscaping, real estate photography quality, no people, no cars',
+  I: 'ELECTRICAL ROUGH-IN: Interior of a home under construction, exposed stud walls, clean electrical conduit runs and junction boxes, warm work-light glow, no people visible',
+  J: 'CONTRACTOR REVIEWING PLANS: Contractor seen fully from behind — hard hat on, work clothes — holding rolled blueprints while standing in front of a half-built stucco home, South Florida vegetation, morning light, face never visible',
+
+  // ── Flat lays / documents / permits ──────────────────────────────────────
+  K: 'BLUEPRINT FLAT LAY: Overhead shot of large architectural blueprints spread across a construction table, yellow hard hat resting on one corner, measuring tape and pencil beside it, no hands or people in frame, warm editorial lighting',
+  L: 'PERMIT DOCUMENTS FLAT LAY: Stack of official South Florida building permit documents with architectural stamps and property details, a ruler and red pen on top, clean desk surface, overhead photography, no people',
+  M: 'TOOLS FLAT LAY: Tool belt, yellow hard hat, folded permit papers, measuring tape, and pencil arranged on rough plywood — warm shallow depth-of-field editorial photo, no hands or people visible',
+  N: 'PERMIT SIGN CLOSEUP: Official building permit posted on a wooden stake in front of a South Florida property, bokeh palm trees and residential street in background, golden hour light, no people',
+
+  // ── Aerial / neighborhood ─────────────────────────────────────────────────
+  O: 'AERIAL NEIGHBORHOOD: Drone view straight down at a South Florida residential neighborhood — grid of streets, stucco rooftops, green yards, two lots clearly mid-construction, palm canopy throughout, no people visible from above',
+  P: 'AERIAL CONSTRUCTION SITE: Drone shot looking down at a single active South Florida residential construction site — concrete slab and framing visible from above, surrounded by neighboring homes, bright midday',
+  Q: 'MIAMI STREET LEVEL: Wide-angle view of a typical Miami-Dade residential block, two homes under construction side by side, stucco homes complete on either side, palm-lined street, bright day, no people',
+  R: 'DORAL TOWNHOUSES: Row of new modern townhouses under construction in a South Florida suburb, CBS block walls at various stages, stacked materials, palm trees, bright sky, no people',
+
+  // ── Tech / platform / data-adjacent ──────────────────────────────────────
+  S: 'LAPTOP WITH MAP: Open laptop on a weathered job-site folding table outdoors, screen showing a satellite map view with bright blue dots pinned across South Florida neighborhoods, rolled blueprints beside it, natural daylight, no people',
+  T: 'DATA DESK FLATLAY: Overhead shot of a clean desk — printed satellite map of Miami-Dade with blue circles marking active projects, a stack of permits, yellow hard hat, measuring tape, no people, crisp studio lighting',
+  U: 'PERMIT STACK WITH LAPTOP: Thick stack of building permit printouts beside an open laptop, mechanical pencil on top, South Florida palm trees visible through a window behind, no people, bright natural light',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -141,23 +155,24 @@ GENERATION RULES:
    - Example: "competitor FOMO" or "platform UI mockup" or "permits data urgency"
 
 3. IMAGE_PROMPT (for DALL-E 3 — follow these rules EXACTLY):
-   THE IMAGE IS A BACKGROUND SCENE ONLY. Text and logo are added separately — do NOT include any text or words in the image.
+   THE IMAGE IS A BACKGROUND SCENE ONLY. Text and logo are added separately in post-processing.
 
-   MANDATORY SCENE — you MUST use exactly this scene, no substitutions:
+   ━━━ ABSOLUTE RULES — NEVER BREAK THESE ━━━
+   • If any person appears: ONLY from behind or side profile — hard hat on, generic work clothes, NO face visible, NO identifiable features, NO specific ethnicity or gender readable.
+   • NO text, NO words, NO readable signs, NO logos, NO watermarks anywhere in the image.
+   • NOT skyscrapers or high-rises — residential and small commercial only.
+
+   MANDATORY SCENE — use EXACTLY this, no substitutions:
    "${chosenScene}"
 
-   VISUAL STYLE REQUIREMENTS:
-   - Professional editorial/magazine photography — like Architectural Digest meets a construction trade magazine
-   - Bright, clean, well-lit — NOT dark, NOT moody, NOT night shots
-   - South Florida vibes: blue skies, palm trees in the background, tropical daylight
-   - High contrast, sharp details, professional photography quality
-   - Square 1:1 composition with the strongest visual element centered or in the upper 60% (lower 40% will have a text overlay so keep it less busy)
-   - NO text, NO logos, NO watermarks in the generated image
-   - NOT skyscrapers — residential or small commercial only
+   VISUAL STYLE:
+   - Professional editorial/magazine photography — bright, clean, sharp, well-lit
+   - South Florida feel: vivid blue sky, palm trees, tropical daylight
+   - Square 1:1 composition — strongest visual element in upper 60%, bottom-left area kept open (text overlay goes there)
+   - High contrast, saturated colors, premium quality
 
-   Write the imagePrompt as a detailed, vivid description of ONLY this scene.
-   Keep the bottom-left area of the composition open/clean — headline text overlays there.
-   End with: "No text, no words, no watermarks in the image."
+   Write the imagePrompt as a detailed vivid description of this specific scene only.
+   End with: "No people, no humans, no faces, no text, no logos, no watermarks."
 
 4. CAPTION (3-5 sentences):
    - Opens with a bold statement (NOT a question, NOT starting with an emoji)
@@ -211,9 +226,9 @@ export async function generateInstagramImage(imagePrompt: string): Promise<strin
   // Append style enforcement
   const finalPrompt = [
     imagePrompt,
-    'Professional editorial photography. Bright, vibrant, well-lit.',
-    'South Florida / Miami feel. Magazine cover quality.',
-    'NO text, NO words, NO logos, NO watermarks anywhere in the image.',
+    'Professional editorial photography. Bright, vibrant, well-lit. South Florida / Miami feel. Magazine cover quality.',
+    'If any person appears: show only from behind or side with no face visible, wearing a hard hat and work clothes — generic, no identifiable features.',
+    'NO text, NO words, NO readable signs, NO logos, NO watermarks anywhere in the image.',
     'Square 1:1 format. Ultra-sharp. High resolution.',
   ].join(' ');
 
