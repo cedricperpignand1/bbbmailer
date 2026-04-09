@@ -147,8 +147,11 @@ GENERATION RULES:
 
 1. HEADLINE (max 7 words):
    - Bold, scroll-stopping text that will appear on the image
-   - Heavy and direct — almost aggressive
-   - Examples from real past posts: "Welcome to the Tinder of Construction" | "The Forecast of Construction" | "We Find Construction Projects Near You" | "Know Exactly Who's Planning to Build"
+   - SIMPLE, DIRECT words only — many contractors speak English as a second language (Spanish, Creole). Anyone must understand it in under 2 seconds.
+   - NO idioms, NO wordplay, NO riddles, NO metaphors, NO clever phrases that require cultural knowledge
+   - Use plain action words and numbers: Find, Get, Win, Beat, Know, See, More, Now, Today, First, Every, New
+   - Good examples: "We Find Construction Projects Near You" | "Know Exactly Who's Building Near You" | "Find New Projects Before Your Competition" | "More Bids. More Work. More Money." | "See Every New Permit In Miami Today"
+   - Bad examples (too clever / idiomatic): "Get There Before Ground Is Broken" | "The Early Bird Gets the Bid" | "Strike While the Iron Is Hot"
 
 2. ANGLE (1 short phrase):
    - The core marketing concept for memory/tracking
