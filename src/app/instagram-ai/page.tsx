@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import Image from "next/image";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -289,17 +288,13 @@ export default function InstagramAiPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* Left: Generated Image */}
             <div className="space-y-3">
-              <div className="relative overflow-hidden rounded-2xl bg-slate-100 shadow-lg">
-                {/* Image — served locally, never expires */}
-                <div className="relative aspect-square w-full">
-                  <Image
-                    src={post.imageUrl}
-                    alt={post.headline || "Generated Instagram image"}
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
-                </div>
+              <div className="overflow-hidden rounded-2xl bg-slate-100 shadow-lg">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={post.imageUrl}
+                  alt={post.headline || "Generated Instagram image"}
+                  className="w-full aspect-square object-cover"
+                />
               </div>
               {/* Image action row */}
               <div className="flex items-center gap-2">
