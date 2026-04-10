@@ -250,3 +250,95 @@ export async function stampAndSaveFile(
   fs.writeFileSync(path.join(dir, fileName), outBuf);
   return fileName;
 }
+
+/**
+ * Creates a 9:16 story image (1080x1920) from a square DALL-E URL.
+ * The photo fills the top portion, a dark branded panel sits at the bottom.
+ * Returns base64 JPEG string (data:image/jpeg;base64,...).
+ */
+export async function stampStoryImage(
+  dalleUrl: string,
+  headline: string
+): Promise<string> {
+  const res = await fetch(dalleUrl);
+  if (!res.ok) throw new Error(`Failed to fetch DALL-E image: ${res.status}`);
+  const imgBuf  = Buffer.from(await res.arrayBuffer());
+  const baseImg = await loadImage(imgBuf);
+
+  const family    = initFont();
+  const fontFamily = family === 'sans-serif' ? 'sans-serif' : `"${family}"`;
+
+  // 9:16 canvas
+  const SW = 1080;
+  const SH = 1920;
+
+  const canvas = createCanvas(SW, SH);
+  const ctx    = canvas.getContext('2d');
+
+  // 1. Dark background
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, SW, SH);
+
+  // 2. Photo — top 70% of canvas, centered & cropped to fill width
+  const photoH   = Math.round(SH * 0.70);
+  const srcSize  = Math.min(baseImg.width, baseImg.height);
+  const srcX     = Math.round((baseImg.width  - srcSize) / 2);
+  const srcY     = Math.round((baseImg.height - srcSize) / 2);
+  ctx.drawImage(baseImg, srcX, srcY, srcSize, srcSize, 0, 0, SW, photoH);
+
+  // 3. Gradient fade from photo into dark panel
+  const fadeGrad = ctx.createLinearGradient(0, photoH - 120, 0, photoH + 60);
+  fadeGrad.addColorStop(0, 'rgba(10,10,10,0)');
+  fadeGrad.addColorStop(1, 'rgba(10,10,10,1)');
+  ctx.fillStyle = fadeGrad;
+  ctx.fillRect(0, photoH - 120, SW, 180);
+
+  // 4. Blue accent bar
+  const accentY = photoH + 60;
+  ctx.fillStyle = '#1055FF';
+  ctx.beginPath();
+  ctx.roundRect(SW / 2 - 40, accentY, 80, 8, 4);
+  ctx.fill();
+
+  // 5. Headline text
+  const text = sanitize(headline);
+  if (text) {
+    const maxTextW = Math.round(SW * 0.88);
+    const len      = text.length;
+    const fontSize = len <= 14 ? 88 : len <= 22 ? 76 : len <= 32 ? 64 : 54;
+    ctx.font = `bold ${fontSize}px ${fontFamily}`;
+    const lines  = wrapText(ctx, text, maxTextW);
+    const lineH  = Math.round(fontSize * 1.2);
+
+    const startY = accentY + 50;
+    for (let i = 0; i < lines.length; i++) {
+      const y     = startY + i * lineH;
+      const lineW = ctx.measureText(lines[i]).width;
+      const x     = (SW - lineW) / 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.fillText(lines[i], x + 3, y + 3);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(lines[i], x, y);
+    }
+  }
+
+  // 6. URL label
+  ctx.font = `bold 32px ${fontFamily}`;
+  const urlText = 'BUILDERSBIDBOOK.COM';
+  const urlW    = ctx.measureText(urlText).width;
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fillText(urlText, (SW - urlW) / 2, SH - 80);
+
+  // 7. Logo — top-right
+  if (fs.existsSync(LOGO_PATH)) {
+    const logoImg = await loadImage(fs.readFileSync(LOGO_PATH));
+    const logoW   = Math.round(SW * 0.28);
+    const scale   = logoW / logoImg.width;
+    const logoH   = Math.round(logoImg.height * scale);
+    const margin  = Math.round(SW * 0.04);
+    ctx.drawImage(logoImg, SW - logoW - margin, margin, logoW, logoH);
+  }
+
+  const outBuf = await canvas.encode('jpeg', 93);
+  return `data:image/jpeg;base64,${outBuf.toString('base64')}`;
+}

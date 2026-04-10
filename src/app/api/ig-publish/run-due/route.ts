@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateInstagramContent, generateInstagramImage } from '@/lib/ai/instagramAi';
-import { stampAndSaveImage } from '@/lib/imageStamp';
+import { stampAndSaveImage, stampStoryImage } from '@/lib/imageStamp';
 import { createMediaContainer, publishMedia, waitForContainer, currentPublishWindow, todayET } from '@/lib/igPublish';
 
 export const runtime = 'nodejs';
@@ -83,6 +83,12 @@ export async function POST(req: NextRequest) {
   const baseUrl  = (process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || 'https://bbbmailer.vercel.app').replace(/\/$/, '');
   const imageUrl = `${baseUrl}/api/ig-publish/img/${stored.id}`;
 
+  // ── 6b. Generate 9:16 story image ────────────────────────────────────────
+  const storyDataUri = await stampStoryImage(dalleUrl, content.headline);
+  const storyBase64  = storyDataUri.replace(/^data:image\/jpeg;base64,/, '');
+  const storyStored  = await prisma.igImageStore.create({ data: { data: storyBase64 } });
+  const storyImageUrl = `${baseUrl}/api/ig-publish/img/${storyStored.id}`;
+
   // ── 6. Save AI post record for anti-repetition ────────────────────────────
   await prisma.igAiPost.create({
     data: {
@@ -114,7 +120,7 @@ export async function POST(req: NextRequest) {
   if (status !== 'failed') {
     try {
       const storyContainerId = await createMediaContainer(
-        config.igUserId, config.accessToken, imageUrl, '', true
+        config.igUserId, config.accessToken, storyImageUrl, '', true
       );
       await waitForContainer(config.igUserId, config.accessToken, storyContainerId);
       storyPostId = await publishMedia(config.igUserId, config.accessToken, storyContainerId);
