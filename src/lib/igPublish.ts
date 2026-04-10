@@ -18,6 +18,9 @@ export async function createMediaContainer(
   const body = new URLSearchParams({ image_url: imageUrl, access_token: accessToken });
   if (isStory) {
     body.set('media_type', 'STORIES');
+    // Add link sticker pointing to the website
+    body.set('sticker_type', 'LINK');
+    body.set('link_url', 'https://buildersbidbook.com');
   } else {
     body.set('caption', caption);
   }
