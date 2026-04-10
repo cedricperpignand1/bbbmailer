@@ -136,5 +136,5 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ ok: status !== 'failed', status, feedPostId, storyPostId, log: logEntry });
+  return NextResponse.json({ ok: status !== 'failed', status, feedPostId, storyPostId, error: errorMsg, log: logEntry });
 }
