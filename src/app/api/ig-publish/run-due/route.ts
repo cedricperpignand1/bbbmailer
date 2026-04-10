@@ -8,6 +8,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 180; // image gen + two IG API calls can take ~2 min
 
+// Vercel cron calls GET — just delegate to the same logic
+export async function GET(req: NextRequest) {
+  return POST(req);
+}
+
 export async function POST(req: NextRequest) {
   // Optional cron key guard
   const cronKey = req.headers.get('x-cron-key');
