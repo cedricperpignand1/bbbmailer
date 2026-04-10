@@ -21,45 +21,56 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // ── 1. Exchange code for short-lived token ──────────────────────────────
-    const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id:     appId,
-        client_secret: appSecret,
-        grant_type:    'authorization_code',
-        redirect_uri:  redirectUri,
-        code,
-      }),
-    });
+    // ── 1. Exchange code for short-lived user token (Facebook OAuth) ────────
+    const tokenUrl = new URL('https://graph.facebook.com/oauth/access_token');
+    tokenUrl.searchParams.set('client_id',     appId);
+    tokenUrl.searchParams.set('client_secret', appSecret);
+    tokenUrl.searchParams.set('redirect_uri',  redirectUri);
+    tokenUrl.searchParams.set('code',          code);
 
-    const tokenData = await tokenRes.json() as {
-      access_token?: string;
-      user_id?: number;
-      error_message?: string;
-    };
+    const tokenRes  = await fetch(tokenUrl.toString());
+    const tokenData = await tokenRes.json() as { access_token?: string; error?: { message: string } };
 
     if (!tokenData.access_token) {
-      const msg = tokenData.error_message ?? 'token_exchange_failed';
+      const msg = tokenData.error?.message ?? 'token_exchange_failed';
       return NextResponse.redirect(`${base}/instagram-ai?ig_error=${encodeURIComponent(msg)}`);
     }
 
     const shortToken = tokenData.access_token;
-    const igUserId   = String(tokenData.user_id ?? '');
 
     // ── 2. Exchange for long-lived token (60 days) ────────────────────────
-    const llUrl = new URL('https://graph.instagram.com/access_token');
-    llUrl.searchParams.set('grant_type',    'ig_exchange_token');
-    llUrl.searchParams.set('client_secret', appSecret);
-    llUrl.searchParams.set('access_token',  shortToken);
+    const llUrl = new URL('https://graph.facebook.com/oauth/access_token');
+    llUrl.searchParams.set('grant_type',        'fb_exchange_token');
+    llUrl.searchParams.set('client_id',         appId);
+    llUrl.searchParams.set('client_secret',     appSecret);
+    llUrl.searchParams.set('fb_exchange_token', shortToken);
 
     const llRes  = await fetch(llUrl.toString());
     const llData = await llRes.json() as { access_token?: string; error?: { message: string } };
+    const longToken = llData.access_token ?? shortToken;
 
-    const finalToken = llData.access_token ?? shortToken;
+    // ── 3. Get Instagram Business Account ID via Pages ────────────────────
+    const pagesRes  = await fetch(`https://graph.facebook.com/me/accounts?access_token=${longToken}`);
+    const pagesData = await pagesRes.json() as { data?: { id: string; access_token: string }[] };
 
-    // ── 3. Save to DB ───────────────────────────────────────────────────────
+    let igUserId   = '';
+    let finalToken = longToken;
+
+    if (pagesData.data && pagesData.data.length > 0) {
+      const page   = pagesData.data[0];
+      const igRes  = await fetch(`https://graph.facebook.com/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`);
+      const igData = await igRes.json() as { instagram_business_account?: { id: string } };
+      if (igData.instagram_business_account?.id) {
+        igUserId   = igData.instagram_business_account.id;
+        finalToken = page.access_token;
+      }
+    }
+
+    if (!igUserId) {
+      return NextResponse.redirect(`${base}/instagram-ai?ig_error=no_ig_account_found`);
+    }
+
+    // ── 4. Save to DB ───────────────────────────────────────────────────────
     await prisma.igPublishConfig.upsert({
       where:  { id: 1 },
       create: { id: 1, igUserId, accessToken: finalToken },
