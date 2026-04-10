@@ -4,8 +4,12 @@ import { prisma } from '@/lib/prisma';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const id = Number(params.id);
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: idStr } = await params;
+  const id = Number(idStr);
   if (!id) return new NextResponse('missing id', { status: 400 });
 
   const img = await prisma.igImageStore.findUnique({ where: { id } });
