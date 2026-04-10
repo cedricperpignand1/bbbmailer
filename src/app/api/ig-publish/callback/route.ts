@@ -6,9 +6,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const code       = searchParams.get('code');
-  const error      = searchParams.get('error');
-  const errorMsg   = searchParams.get('error_message');
+  const code     = searchParams.get('code');
+  const error    = searchParams.get('error');
+  const errorMsg = searchParams.get('error_message');
 
   const base        = process.env.NEXT_PUBLIC_BASE_URL ?? '';
   const appId       = process.env.IG_APP_ID!;
@@ -20,54 +20,56 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${base}/instagram-ai?ig_error=${encodeURIComponent(msg)}`);
   }
 
-  // ── 1. Exchange code for short-lived token (Facebook OAuth) ──────────────
-  const tokenUrl = new URL('https://graph.facebook.com/oauth/access_token');
-  tokenUrl.searchParams.set('client_id',     appId);
-  tokenUrl.searchParams.set('client_secret', appSecret);
-  tokenUrl.searchParams.set('redirect_uri',  redirectUri);
-  tokenUrl.searchParams.set('code',          code);
+  try {
+    // ── 1. Exchange code for short-lived token ──────────────────────────────
+    const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id:     appId,
+        client_secret: appSecret,
+        grant_type:    'authorization_code',
+        redirect_uri:  redirectUri,
+        code,
+      }),
+    });
 
-  const tokenRes  = await fetch(tokenUrl.toString());
-  const tokenData = await tokenRes.json() as { access_token?: string; error?: { message: string } };
+    const tokenData = await tokenRes.json() as {
+      access_token?: string;
+      user_id?: number;
+      error_message?: string;
+    };
 
-  if (!tokenData.access_token) {
-    const msg = tokenData.error?.message ?? 'token_exchange_failed';
+    if (!tokenData.access_token) {
+      const msg = tokenData.error_message ?? 'token_exchange_failed';
+      return NextResponse.redirect(`${base}/instagram-ai?ig_error=${encodeURIComponent(msg)}`);
+    }
+
+    const shortToken = tokenData.access_token;
+    const igUserId   = String(tokenData.user_id ?? '');
+
+    // ── 2. Exchange for long-lived token (60 days) ────────────────────────
+    const llUrl = new URL('https://graph.instagram.com/access_token');
+    llUrl.searchParams.set('grant_type',    'ig_exchange_token');
+    llUrl.searchParams.set('client_secret', appSecret);
+    llUrl.searchParams.set('access_token',  shortToken);
+
+    const llRes  = await fetch(llUrl.toString());
+    const llData = await llRes.json() as { access_token?: string; error?: { message: string } };
+
+    const finalToken = llData.access_token ?? shortToken;
+
+    // ── 3. Save to DB ───────────────────────────────────────────────────────
+    await prisma.igPublishConfig.upsert({
+      where:  { id: 1 },
+      create: { id: 1, igUserId, accessToken: finalToken },
+      update: { igUserId, accessToken: finalToken },
+    });
+
+    return NextResponse.redirect(`${base}/instagram-ai?ig_connected=1`);
+
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown_error';
     return NextResponse.redirect(`${base}/instagram-ai?ig_error=${encodeURIComponent(msg)}`);
   }
-
-  const shortToken = tokenData.access_token;
-
-  // ── 2. Exchange for long-lived token (60 days) ────────────────────────────
-  const llUrl = new URL('https://graph.facebook.com/oauth/access_token');
-  llUrl.searchParams.set('grant_type',        'fb_exchange_token');
-  llUrl.searchParams.set('client_id',         appId);
-  llUrl.searchParams.set('client_secret',     appSecret);
-  llUrl.searchParams.set('fb_exchange_token', shortToken);
-
-  const llRes  = await fetch(llUrl.toString());
-  const llData = await llRes.json() as { access_token?: string; error?: { message: string } };
-
-  if (!llData.access_token) {
-    return NextResponse.redirect(`${base}/instagram-ai?ig_error=longtoken_failed`);
-  }
-
-  const longToken = llData.access_token;
-
-  // ── 3. Get Instagram user ID from the new Instagram API ──────────────────
-  const meRes  = await fetch(`https://graph.instagram.com/v19.0/me?fields=id,username&access_token=${longToken}`);
-  const meData = await meRes.json() as { id?: string; username?: string; error?: { message: string } };
-
-  if (!meData.id) {
-    const msg = meData.error?.message ?? 'no_ig_account_found';
-    return NextResponse.redirect(`${base}/instagram-ai?ig_error=${encodeURIComponent(msg)}`);
-  }
-
-  // ── 4. Save to DB ─────────────────────────────────────────────────────────
-  await prisma.igPublishConfig.upsert({
-    where:  { id: 1 },
-    create: { id: 1, igUserId: meData.id, accessToken: longToken },
-    update: { igUserId: meData.id, accessToken: longToken },
-  });
-
-  return NextResponse.redirect(`${base}/instagram-ai?ig_connected=1`);
 }

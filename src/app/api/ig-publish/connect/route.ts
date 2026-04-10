@@ -12,14 +12,11 @@ export async function GET() {
   }
 
   const scopes = [
-    'pages_show_list',
-    'pages_read_engagement',
+    'instagram_business_basic',
     'instagram_content_publish',
-    'instagram_basic',
   ].join(',');
 
-  // Must use Facebook dialog OAuth for the Instagram Graph API
-  const url = new URL('https://www.facebook.com/dialog/oauth');
+  const url = new URL('https://api.instagram.com/oauth/authorize');
   url.searchParams.set('client_id', appId);
   url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('scope', scopes);
