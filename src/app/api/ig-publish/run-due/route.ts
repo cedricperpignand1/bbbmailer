@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
 
   // Save to DB so we can serve it via /api/ig-publish/img?id=X
   const stored   = await prisma.igImageStore.create({ data: { data: base64 } });
-  const baseUrl  = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '') ?? '';
+  const baseUrl  = (process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || 'https://bbbmailer.vercel.app').replace(/\/$/, '');
   const imageUrl = `${baseUrl}/api/ig-publish/img/${stored.id}`;
 
   // ── 6. Save AI post record for anti-repetition ────────────────────────────
