@@ -85,7 +85,6 @@ export async function stampAndSaveImage(
   const imgBuf = Buffer.from(await res.arrayBuffer());
 
   const family = initFont();
-  // CSS font string — named families get quoted, generic keywords (sans-serif) must NOT be quoted
   const fontFamily = family === 'sans-serif' ? 'sans-serif' : `"${family}"`;
   const baseImg = await loadImage(imgBuf);
   const W = baseImg.width  || 1024;
@@ -97,62 +96,157 @@ export async function stampAndSaveImage(
   // 1. Draw base image
   ctx.drawImage(baseImg, 0, 0, W, H);
 
-  // 2. Dark gradient band — bottom 42%
-  const bandY = Math.round(H * 0.58);
+  // 2. Strong dark gradient band — bottom 55% (Fox Business style)
+  const bandY = Math.round(H * 0.42);
   const grad = ctx.createLinearGradient(0, bandY, 0, H);
   grad.addColorStop(0,    'rgba(0,0,0,0)');
-  grad.addColorStop(0.38, 'rgba(0,0,0,0.52)');
-  grad.addColorStop(1,    'rgba(0,0,0,0.88)');
+  grad.addColorStop(0.25, 'rgba(0,0,0,0.55)');
+  grad.addColorStop(0.6,  'rgba(0,0,0,0.82)');
+  grad.addColorStop(1,    'rgba(0,0,0,0.95)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, bandY, W, H - bandY);
 
-  // 3. Headline text (left 67% — keeps logo area clear)
+  // 3. Headline text — centered, large, bold (Fox Business style)
   const text = sanitize(headline);
   if (text) {
-    const maxTextW = Math.round(W * 0.67);
+    const maxTextW = Math.round(W * 0.88); // wide — nearly full width
     const len = text.length;
-    const fontSize = len <= 18 ? 86 : len <= 28 ? 72 : len <= 40 ? 60 : 50;
+    const fontSize = len <= 14 ? 96 : len <= 22 ? 82 : len <= 32 ? 70 : 60;
 
     ctx.font = `bold ${fontSize}px ${fontFamily}`;
     const lines  = wrapText(ctx, text, maxTextW);
-    const lineH  = Math.round(fontSize * 1.22);
+    const lineH  = Math.round(fontSize * 1.18);
     const blockH = lines.length * lineH;
 
-    const urlY       = H - 28;
-    const firstLineY = urlY - 34 - blockH;
-    const accentY    = firstLineY - 20;
+    // Position: headline sits in the lower 45%, URL label at very bottom
+    const urlY       = H - 32;
+    const firstLineY = urlY - 48 - blockH;
+    const accentY    = firstLineY - 22;
 
-    // Blue accent bar
+    // Blue accent bar — centered above headline
+    const accentW = 70;
     ctx.fillStyle = '#1055FF';
-    ctx.fillRect(48, accentY, 58, 7);
+    ctx.beginPath();
+    ctx.roundRect(W / 2 - accentW / 2, accentY, accentW, 8, 4);
+    ctx.fill();
 
-    // Text: shadow pass then white
+    // Text lines — centered with shadow
     for (let i = 0; i < lines.length; i++) {
       const y = firstLineY + i * lineH;
       ctx.font = `bold ${fontSize}px ${fontFamily}`;
-      ctx.fillStyle = 'rgba(0,0,0,0.4)';
-      ctx.fillText(lines[i], 51, y + 3);
-      ctx.fillStyle = 'white';
-      ctx.fillText(lines[i], 48, y);
+      const lineW = ctx.measureText(lines[i]).width;
+      const x = (W - lineW) / 2;
+
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillText(lines[i], x + 3, y + 3);
+      // White text
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(lines[i], x, y);
     }
 
-    // URL label
-    ctx.font = `19px ${fontFamily}`;
-    ctx.fillStyle = 'rgba(255,255,255,0.48)';
-    ctx.fillText('BUILDERSBIDBOOK.COM', 48, urlY);
+    // URL label — centered at bottom
+    ctx.font = `bold 20px ${fontFamily}`;
+    const urlText = 'BUILDERSBIDBOOK.COM';
+    const urlW = ctx.measureText(urlText).width;
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText(urlText, (W - urlW) / 2, urlY);
   }
 
-  // 4. BBB logo — bottom-right corner
+  // 4. BBB logo — TOP-RIGHT corner
   if (fs.existsSync(LOGO_PATH)) {
     const logoImg = await loadImage(fs.readFileSync(LOGO_PATH));
     const logoW   = Math.round(W * 0.22);
     const scale   = logoW / logoImg.width;
     const logoH   = Math.round(logoImg.height * scale);
     const margin  = Math.round(W * 0.03);
-    ctx.drawImage(logoImg, W - logoW - margin, H - logoH - margin, logoW, logoH);
+    ctx.drawImage(logoImg, W - logoW - margin, margin, logoW, logoH);
   }
 
   // 5. Encode to JPEG
   const outBuf = await canvas.encode('jpeg', 93);
   return `data:image/jpeg;base64,${outBuf.toString('base64')}`;
+}
+
+/**
+ * Same as stampAndSaveImage but writes to /public/ig-images/{fileName}.jpg
+ * and returns the file name (caller builds the public URL).
+ */
+export async function stampAndSaveFile(
+  dalleUrl: string,
+  headline: string
+): Promise<string> {
+  const res = await fetch(dalleUrl);
+  if (!res.ok) throw new Error(`Failed to fetch DALL-E image: ${res.status}`);
+  const imgBuf = Buffer.from(await res.arrayBuffer());
+
+  const family = initFont();
+  const fontFamily = family === 'sans-serif' ? 'sans-serif' : `"${family}"`;
+  const baseImg = await loadImage(imgBuf);
+  const W = baseImg.width || 1024;
+  const H = baseImg.height || 1024;
+
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(baseImg, 0, 0, W, H);
+
+  const bandY = Math.round(H * 0.42);
+  const grad = ctx.createLinearGradient(0, bandY, 0, H);
+  grad.addColorStop(0,    'rgba(0,0,0,0)');
+  grad.addColorStop(0.25, 'rgba(0,0,0,0.55)');
+  grad.addColorStop(0.6,  'rgba(0,0,0,0.82)');
+  grad.addColorStop(1,    'rgba(0,0,0,0.95)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, bandY, W, H - bandY);
+
+  const text = sanitize(headline);
+  if (text) {
+    const maxTextW = Math.round(W * 0.88);
+    const len = text.length;
+    const fontSize = len <= 14 ? 96 : len <= 22 ? 82 : len <= 32 ? 70 : 60;
+    ctx.font = `bold ${fontSize}px ${fontFamily}`;
+    const lines  = wrapText(ctx, text, maxTextW);
+    const lineH  = Math.round(fontSize * 1.18);
+    const blockH = lines.length * lineH;
+    const urlY       = H - 32;
+    const firstLineY = urlY - 48 - blockH;
+    const accentY    = firstLineY - 22;
+    const accentW = 70;
+    ctx.fillStyle = '#1055FF';
+    ctx.beginPath();
+    ctx.roundRect(W / 2 - accentW / 2, accentY, accentW, 8, 4);
+    ctx.fill();
+    for (let i = 0; i < lines.length; i++) {
+      const y = firstLineY + i * lineH;
+      ctx.font = `bold ${fontSize}px ${fontFamily}`;
+      const lineW = ctx.measureText(lines[i]).width;
+      const x = (W - lineW) / 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillText(lines[i], x + 3, y + 3);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(lines[i], x, y);
+    }
+    ctx.font = `bold 20px ${fontFamily}`;
+    const urlText = 'BUILDERSBIDBOOK.COM';
+    const urlW = ctx.measureText(urlText).width;
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText(urlText, (W - urlW) / 2, urlY);
+  }
+
+  if (fs.existsSync(LOGO_PATH)) {
+    const logoImg = await loadImage(fs.readFileSync(LOGO_PATH));
+    const logoW   = Math.round(W * 0.22);
+    const scale   = logoW / logoImg.width;
+    const logoH   = Math.round(logoImg.height * scale);
+    const margin  = Math.round(W * 0.03);
+    ctx.drawImage(logoImg, W - logoW - margin, margin, logoW, logoH);
+  }
+
+  const outBuf = await canvas.encode('jpeg', 93);
+
+  const dir = path.join(process.cwd(), 'public', 'ig-images');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const fileName = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  fs.writeFileSync(path.join(dir, fileName), outBuf);
+  return fileName;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -14,6 +14,25 @@ type GeneratedPost = {
 };
 
 type CopyState = "idle" | "copied";
+
+type PublishConfig = {
+  id: number;
+  igUserId: string;
+  isActive: boolean;
+  connected: boolean;
+};
+
+type PublishLog = {
+  id: number;
+  dateStr: string;
+  windowKey: string;
+  headline: string;
+  feedPostId: string;
+  storyPostId: string;
+  status: string;
+  error?: string;
+  publishedAt: string;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Loading message rotation — shown while API is working
@@ -113,6 +132,220 @@ function ShuffleIcon({ className = "h-5 w-5" }: { className?: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Page
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Auto-Publisher Panel
+// ─────────────────────────────────────────────────────────────────────────────
+const SCHEDULE = [
+  { day: "Tuesday",   time: "7:00 AM ET",  key: "tue-7am",    reason: "Before the job site" },
+  { day: "Wednesday", time: "12:00 PM ET", key: "wed-12pm",   reason: "Lunch scroll" },
+  { day: "Thursday",  time: "6:30 PM ET",  key: "thu-630pm",  reason: "After work" },
+];
+
+function AutoPublisherPanel() {
+  const [config, setConfig] = useState<PublishConfig | null>(null);
+  const [logs, setLogs] = useState<PublishLog[]>([]);
+  const [toggling, setToggling] = useState(false);
+  const [forceRunning, setForceRunning] = useState(false);
+  const [forceMsg, setForceMsg] = useState<string | null>(null);
+  const [oauthMsg, setOauthMsg] = useState<string | null>(null);
+
+  // Check for OAuth callback result in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("ig_connected") === "1") {
+      setOauthMsg("Instagram connected successfully!");
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (params.get("ig_error")) {
+      setOauthMsg(`Connection failed: ${params.get("ig_error")}`);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  const loadData = useCallback(async () => {
+    const r = await fetch("/api/ig-publish");
+    const d = await r.json();
+    setConfig(d.config);
+    setLogs(d.logs ?? []);
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  async function toggle() {
+    if (!config) return;
+    setToggling(true);
+    const r = await fetch("/api/ig-publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "toggle", isActive: !config.isActive }),
+    });
+    const d = await r.json();
+    setConfig(d.config);
+    setToggling(false);
+  }
+
+  async function disconnect() {
+    const r = await fetch("/api/ig-publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "disconnect" }),
+    });
+    const d = await r.json();
+    setConfig(d.config);
+    setLogs([]);
+  }
+
+  async function forceRun() {
+    setForceRunning(true);
+    setForceMsg(null);
+    try {
+      const r = await fetch("/api/ig-publish/run-due?force=1", { method: "POST" });
+      const d = await r.json();
+      if (d.skip) {
+        setForceMsg(`Skipped: ${d.reason}`);
+      } else if (d.ok) {
+        setForceMsg(`Posted! Feed: ${d.feedPostId || "—"} · Story: ${d.storyPostId || "—"}`);
+        await loadData();
+      } else {
+        setForceMsg(`Error: ${d.error ?? d.status}`);
+      }
+    } catch {
+      setForceMsg("Network error");
+    } finally {
+      setForceRunning(false);
+    }
+  }
+
+  const windowLabels: Record<string, string> = {
+    "tue-7am":   "Tue 7 AM",
+    "wed-12pm":  "Wed 12 PM",
+    "thu-630pm": "Thu 6:30 PM",
+    "force":     "Manual",
+  };
+
+  return (
+    <div className="rounded-3xl border border-purple-100 bg-gradient-to-br from-purple-50 to-pink-50 p-5 space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 shadow-sm">
+            <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Auto-Publisher</h2>
+            <p className="text-xs text-slate-500">Generates + posts to IG feed &amp; story — 3×/week</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {config?.connected && (
+            <button
+              onClick={toggle}
+              disabled={toggling}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.isActive ? "bg-purple-600" : "bg-slate-300"}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${config.isActive ? "translate-x-6" : "translate-x-1"}`} />
+            </button>
+          )}
+          {config?.connected && (
+            <span className={`text-xs font-semibold ${config.isActive ? "text-purple-700" : "text-slate-400"}`}>
+              {config.isActive ? "Active" : "Paused"}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Schedule strip */}
+      <div className="grid grid-cols-3 gap-2">
+        {SCHEDULE.map((s) => (
+          <div key={s.key} className="rounded-2xl border border-purple-200 bg-white/70 px-3 py-2 text-center">
+            <p className="text-xs font-bold text-slate-800">{s.day}</p>
+            <p className="text-xs text-purple-700 font-semibold">{s.time}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">{s.reason}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* OAuth feedback */}
+      {oauthMsg && (
+        <p className={`text-xs font-semibold rounded-xl px-3 py-2 ${oauthMsg.startsWith("Instagram connected") ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+          {oauthMsg}
+        </p>
+      )}
+
+      {/* Connection form */}
+      {!config?.connected ? (
+        <div className="rounded-2xl border border-purple-200 bg-white p-4 space-y-3 text-center">
+          <p className="text-xs font-bold text-slate-700">Connect your Instagram account</p>
+          <p className="text-xs text-slate-400">One click — no copy-pasting tokens</p>
+          <a
+            href="/api/ig-publish/connect"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:shadow-lg hover:-translate-y-0.5 transition"
+          >
+            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+            </svg>
+            Connect Instagram
+          </a>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-semibold text-emerald-800">Connected</span>
+            <span className="text-xs text-slate-500">· ID: {config.igUserId}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={forceRun}
+              disabled={forceRunning}
+              className="rounded-lg border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+            >
+              {forceRunning ? "Posting…" : "Post Now"}
+            </button>
+            <button
+              onClick={disconnect}
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+            >
+              Disconnect
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Force run feedback */}
+      {forceMsg && (
+        <p className={`text-xs font-medium ${forceMsg.startsWith("Posted") ? "text-emerald-600" : "text-amber-600"}`}>
+          {forceMsg}
+        </p>
+      )}
+
+      {/* Recent log */}
+      {logs.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">Recent Posts</p>
+          <div className="space-y-1.5 max-h-56 overflow-y-auto">
+            {logs.map((l) => (
+              <div key={l.id} className="flex items-start gap-2 rounded-xl border border-slate-100 bg-white px-3 py-2">
+                <div className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${l.status === "success" ? "bg-emerald-500" : l.status === "partial" ? "bg-amber-400" : "bg-red-400"}`} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-slate-800 truncate">{l.headline || "—"}</p>
+                  <p className="text-[10px] text-slate-400">
+                    {windowLabels[l.windowKey] ?? l.windowKey} · {l.dateStr}
+                    {l.feedPostId ? ` · Feed ✓` : ""}
+                    {l.storyPostId ? ` · Story ✓` : ""}
+                  </p>
+                  {l.error && <p className="text-[10px] text-red-500 truncate">{l.error}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function InstagramAiPage() {
   const [post, setPost] = useState<GeneratedPost | null>(null);
   const [loading, setLoading] = useState(false);
@@ -185,6 +418,9 @@ export default function InstagramAiPage() {
 
   return (
     <div className="space-y-6 p-1">
+      {/* ── Auto-Publisher ─────────────────────────────────────────────────── */}
+      <AutoPublisherPanel />
+
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
@@ -384,16 +620,41 @@ export default function InstagramAiPage() {
       )}
 
       {/* ── Info footer ─────────────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 flex flex-wrap gap-4 items-center text-xs text-slate-500">
-        <span>
+      <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-500 space-y-3">
+        <p>
           <span className="font-semibold text-slate-700">How it works:</span>{" "}
-          Each shuffle generates a unique concept using GPT-4o, then creates the image with DALL-E 3.
-          Previous posts are remembered so content stays fresh.
-        </span>
-        <span className="text-slate-300">|</span>
-        <span>Images are saved locally with the BBB logo stamped in — they never expire.</span>
-        <span className="text-slate-300">|</span>
-        <span>No Instagram API — generate, download, and post manually.</span>
+          Each shuffle generates a unique concept using GPT-4o + DALL-E 3. Auto-publisher posts
+          to your Instagram feed AND story 3×/week at the best times for construction workers.
+        </p>
+        <details className="group">
+          <summary className="cursor-pointer font-semibold text-slate-700 list-none flex items-center gap-1 hover:text-purple-700">
+            <svg className="h-3 w-3 transition group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
+            How to connect Instagram (one-time setup)
+          </summary>
+          <ol className="mt-2 space-y-1.5 list-decimal list-inside leading-relaxed text-slate-600">
+            <li>Go to <strong>business.facebook.com</strong> → create or use an existing Facebook Page</li>
+            <li>Connect your <strong>Instagram Professional/Creator account</strong> to that Page (Settings → Instagram → Connect)</li>
+            <li>Go to <strong>developers.facebook.com</strong> → My Apps → Create App → choose &quot;Business&quot;</li>
+            <li>Add the <strong>Instagram Graph API</strong> product to your app</li>
+            <li>Under Permissions request: <code>instagram_basic</code>, <code>instagram_content_publish</code>, <code>pages_show_list</code>, <code>pages_read_engagement</code></li>
+            <li>Generate a <strong>User Access Token</strong> with those permissions (Graph API Explorer → Generate)</li>
+            <li>Exchange for a <strong>Long-Lived Token</strong>:<br/>
+              <code className="bg-slate-200 rounded px-1">GET /oauth/access_token?grant_type=fb_exchange_token&client_id=APP_ID&client_secret=APP_SECRET&fb_exchange_token=SHORT_TOKEN</code>
+            </li>
+            <li>Get your <strong>Instagram User ID</strong>:<br/>
+              <code className="bg-slate-200 rounded px-1">GET /me/accounts → find the page → GET /{"{page-id}"}?fields=instagram_business_account</code>
+            </li>
+            <li>Add <code>NEXT_PUBLIC_BASE_URL=https://yourdomain.com</code> to your <code>.env</code> (so IG can fetch the images)</li>
+            <li>Paste the <strong>IG User ID</strong> and <strong>Long-Lived Token</strong> into the Auto-Publisher panel above</li>
+            <li>Toggle <strong>Active</strong> — the cron at <code>POST /api/ig-publish/run-due</code> handles the rest</li>
+          </ol>
+          <p className="mt-2 text-amber-700 font-medium">
+            Cron: call <code>POST /api/ig-publish/run-due</code> every 15 minutes
+            (e.g. <code>*/15 * * * *</code>). It only posts in the 3 scheduled windows.
+          </p>
+        </details>
       </div>
     </div>
   );
