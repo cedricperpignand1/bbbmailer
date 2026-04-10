@@ -16,7 +16,7 @@ export async function GET() {
     'instagram_content_publish',
   ].join(',');
 
-  const url = new URL('https://api.instagram.com/oauth/authorize');
+  const url = new URL('https://www.facebook.com/dialog/oauth');
   url.searchParams.set('client_id', appId);
   url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('scope', scopes);
