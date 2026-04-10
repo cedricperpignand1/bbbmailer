@@ -19,6 +19,7 @@ export async function createMediaContainer(
   if (isStory) {
     body.set('media_type', 'STORIES');
   } else {
+    body.set('media_type', 'IMAGE');
     body.set('caption', caption);
   }
 
