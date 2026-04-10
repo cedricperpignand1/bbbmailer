@@ -19,14 +19,14 @@ export async function createMediaContainer(
   if (isStory) {
     body.set('media_type', 'STORIES');
   } else {
-    body.set('media_type', 'IMAGE');
     body.set('caption', caption);
   }
 
   const res = await fetch(`${GRAPH}/${igUserId}/media`, { method: 'POST', body });
-  const data = await res.json() as { id?: string; error?: { message: string } };
+  const data = await res.json() as { id?: string; error?: { message: string; code?: number; error_subcode?: number } };
   if (!res.ok || !data.id) {
-    throw new Error(data.error?.message ?? `createMediaContainer HTTP ${res.status}`);
+    const detail = JSON.stringify(data.error ?? data);
+    throw new Error(`IG createContainer failed: ${detail}`);
   }
   return data.id;
 }
