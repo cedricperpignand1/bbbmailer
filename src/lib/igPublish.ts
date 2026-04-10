@@ -31,6 +31,18 @@ export async function createMediaContainer(
   return data.id;
 }
 
+/** Wait for a container to be ready before publishing (Instagram needs a few seconds). */
+export async function waitForContainer(igUserId: string, accessToken: string, creationId: string, retries = 8): Promise<void> {
+  for (let i = 0; i < retries; i++) {
+    await new Promise(r => setTimeout(r, 4000));
+    const res  = await fetch(`${GRAPH}/${creationId}?fields=status_code&access_token=${accessToken}`);
+    const data = await res.json() as { status_code?: string };
+    if (data.status_code === 'FINISHED') return;
+    if (data.status_code === 'ERROR') throw new Error('Media container processing failed');
+  }
+  // proceed anyway after timeout
+}
+
 /**
  * Step 2 — publish a container created above.
  * Returns the published media ID.

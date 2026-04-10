@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateInstagramContent, generateInstagramImage } from '@/lib/ai/instagramAi';
 import { stampAndSaveImage } from '@/lib/imageStamp';
-import { createMediaContainer, publishMedia, currentPublishWindow, todayET } from '@/lib/igPublish';
+import { createMediaContainer, publishMedia, waitForContainer, currentPublishWindow, todayET } from '@/lib/igPublish';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
     const feedContainerId = await createMediaContainer(
       config.igUserId, config.accessToken, imageUrl, content.caption, false
     );
+    await waitForContainer(config.igUserId, config.accessToken, feedContainerId);
     feedPostId = await publishMedia(config.igUserId, config.accessToken, feedContainerId);
   } catch (err) {
     status   = 'failed';
@@ -115,6 +116,7 @@ export async function POST(req: NextRequest) {
       const storyContainerId = await createMediaContainer(
         config.igUserId, config.accessToken, imageUrl, '', true
       );
+      await waitForContainer(config.igUserId, config.accessToken, storyContainerId);
       storyPostId = await publishMedia(config.igUserId, config.accessToken, storyContainerId);
     } catch (err) {
       status   = 'partial'; // feed worked, story failed
