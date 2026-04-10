@@ -2,7 +2,7 @@
 // Meta Graph API helper for Instagram auto-publishing.
 // Docs: https://developers.facebook.com/docs/instagram-api/guides/content-publishing
 
-const GRAPH = 'https://graph.instagram.com/v19.0';
+const GRAPH = 'https://graph.facebook.com/v19.0';
 
 /**
  * Step 1 — create a media container.
