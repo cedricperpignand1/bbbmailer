@@ -12,8 +12,10 @@ export async function GET() {
   }
 
   const scopes = [
-    'instagram_business_basic',
+    'pages_show_list',
+    'pages_read_engagement',
     'instagram_content_publish',
+    'instagram_basic',
   ].join(',');
 
   // Must use Facebook dialog OAuth for the Instagram Graph API

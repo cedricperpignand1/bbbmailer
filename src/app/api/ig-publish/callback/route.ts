@@ -6,16 +6,18 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const code  = searchParams.get('code');
-  const error = searchParams.get('error');
+  const code       = searchParams.get('code');
+  const error      = searchParams.get('error');
+  const errorMsg   = searchParams.get('error_message');
 
   const base        = process.env.NEXT_PUBLIC_BASE_URL ?? '';
   const appId       = process.env.IG_APP_ID!;
   const appSecret   = process.env.IG_APP_SECRET!;
   const redirectUri = process.env.IG_REDIRECT_URI!;
 
-  if (error || !code) {
-    return NextResponse.redirect(`${base}/instagram-ai?ig_error=${error ?? 'no_code'}`);
+  if (error || errorMsg || !code) {
+    const msg = errorMsg ?? error ?? 'no_code';
+    return NextResponse.redirect(`${base}/instagram-ai?ig_error=${encodeURIComponent(msg)}`);
   }
 
   // ── 1. Exchange code for short-lived token (Facebook OAuth) ──────────────
