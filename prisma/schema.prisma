@@ -683,6 +683,14 @@ model IgAiPost {
   @@index([createdAt])
 }
 
+// ── Instagram Image Store ─────────────────────────────────────────────────────
+// Stores stamped images as base64 so they can be served via API on Vercel.
+model IgImageStore {
+  id        Int      @id @default(autoincrement())
+  data      String   @db.Text   // base64 JPEG
+  createdAt DateTime @default(now())
+}
+
 // ── Instagram Auto-Publisher ──────────────────────────────────────────────────
 // Uses the official Meta Graph API to post feed posts + stories automatically.
 // 3x/week: Tue 7 AM ET · Wed 12 PM ET · Thu 6:30 PM ET

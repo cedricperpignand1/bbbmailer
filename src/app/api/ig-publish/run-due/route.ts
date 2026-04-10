@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateInstagramContent, generateInstagramImage } from '@/lib/ai/instagramAi';
-import { stampAndSaveFile } from '@/lib/imageStamp';
+import { stampAndSaveImage } from '@/lib/imageStamp';
 import { createMediaContainer, publishMedia, currentPublishWindow, todayET } from '@/lib/igPublish';
 
 export const runtime = 'nodejs';
@@ -63,17 +63,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'AI returned incomplete content' }, { status: 500 });
   }
 
-  // ── 5. Generate + stamp image, save to disk ───────────────────────────────
+  // ── 5. Generate + stamp image, save to DB ────────────────────────────────
   const dalleUrl = await generateInstagramImage(content.imagePrompt);
   if (!dalleUrl) {
     return NextResponse.json({ ok: false, error: 'Image generation failed' }, { status: 500 });
   }
 
-  const fileName = await stampAndSaveFile(dalleUrl, content.headline);
+  // stampAndSaveImage returns "data:image/jpeg;base64,..." — extract base64 only
+  const dataUri  = await stampAndSaveImage(dalleUrl, content.headline);
+  const base64   = dataUri.replace(/^data:image\/jpeg;base64,/, '');
 
-  // Build the public image URL (must be HTTPS and publicly accessible for IG API)
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '') ?? '';
-  const imageUrl = `${baseUrl}/ig-images/${fileName}`;
+  // Save to DB so we can serve it via /api/ig-publish/img?id=X
+  const stored   = await prisma.igImageStore.create({ data: { data: base64 } });
+  const baseUrl  = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '') ?? '';
+  const imageUrl = `${baseUrl}/api/ig-publish/img?id=${stored.id}`;
 
   // ── 6. Save AI post record for anti-repetition ────────────────────────────
   await prisma.igAiPost.create({
@@ -121,13 +124,13 @@ export async function POST(req: NextRequest) {
       configId: 1, dateStr, windowKey,
       headline: content.headline,
       caption:  content.caption,
-      imageFile: fileName,
+      imageFile: String(stored.id),
       feedPostId, storyPostId, status, error: errorMsg,
     },
     update: {
       headline: content.headline,
       caption:  content.caption,
-      imageFile: fileName,
+      imageFile: String(stored.id),
       feedPostId, storyPostId, status, error: errorMsg,
       publishedAt: new Date(),
     },
