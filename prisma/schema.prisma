@@ -691,6 +691,155 @@ model IgImageStore {
   createdAt DateTime @default(now())
 }
 
+// ── Meta Ads (Lead Generation) ───────────────────────────────────────────────
+
+// One per launch. Maps to a single Facebook campaign.
+model MetaCampaign {
+  id               String    @id @default(cuid())
+  name             String
+  metaCampaignId   String?   @unique  // Facebook campaign ID once created
+  status           String    @default("draft") // draft|launching|active|paused|stopped|error
+  objective        String    @default("OUTCOME_LEADS")
+  dailyBudgetCents Int       @default(1000)
+  cities           String[]  // ["Miami, FL", "Fort Lauderdale, FL"]
+  metaLeadFormId   String?   // Reusable Facebook lead form ID
+  startedAt        DateTime?
+  stoppedAt        DateTime?
+  error            String?   @db.Text
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  adSets           MetaAdSet[]
+  creativeVariants MetaCreativeVariant[]
+  performanceSnaps MetaPerformanceSnapshot[]
+  aiReviews        MetaAiReview[]
+}
+
+// One ad set per city.
+model MetaAdSet {
+  id               String       @id @default(cuid())
+  campaignId       String
+  campaign         MetaCampaign @relation(fields: [campaignId], references: [id])
+  metaAdSetId      String?      @unique
+  city             String
+  status           String       @default("active") // active|paused|stopped
+  dailyBudgetCents Int          @default(0)
+  pauseReason      String?
+  leads            Int          @default(0)
+  spend            Float        @default(0)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  ads MetaAd[]
+
+  @@index([campaignId])
+  @@index([status])
+}
+
+// Individual ad within an ad set, linked to a creative variant.
+model MetaAd {
+  id             String               @id @default(cuid())
+  adSetId        String
+  adSet          MetaAdSet            @relation(fields: [adSetId], references: [id])
+  variantId      String?
+  variant        MetaCreativeVariant? @relation(fields: [variantId], references: [id])
+  metaAdId       String?              @unique
+  metaCreativeId String?
+  status         String               @default("active") // active|paused|stopped
+  pauseReason    String?
+  leads          Int                  @default(0)
+  spend          Float                @default(0)
+  clicks         Int                  @default(0)
+  impressions    Int                  @default(0)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([adSetId])
+  @@index([status])
+}
+
+// AI-generated ad creative variations — copy + image + AI score.
+model MetaCreativeVariant {
+  id             String       @id @default(cuid())
+  campaignId     String
+  campaign       MetaCampaign @relation(fields: [campaignId], references: [id])
+  angle          String       // "zillow-of-construction" | "find-active-projects" | etc.
+  headline       String       // max 40 chars
+  primaryText    String       @db.Text
+  description    String?
+  ctaType        String       @default("SIGN_UP")
+  imagePrompt    String       @db.Text
+  imageUrl       String?      // DALL-E URL (temporary, Meta downloads immediately)
+  metaImageHash  String?      // Hash returned after uploading to Meta
+  aiScore        Float?       // 0-10 score from AI judge
+  aiVerdict      String?      // "approved" | "rejected" | "needs_revision"
+  aiNotes        String?      @db.Text
+  isActive       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  ads MetaAd[]
+
+  @@index([campaignId])
+  @@index([angle])
+  @@index([aiVerdict])
+}
+
+// Point-in-time performance snapshot from Meta Insights API.
+model MetaPerformanceSnapshot {
+  id           String       @id @default(cuid())
+  campaignId   String
+  campaign     MetaCampaign @relation(fields: [campaignId], references: [id])
+  snappedAt    DateTime     @default(now())
+
+  impressions  Int          @default(0)
+  clicks       Int          @default(0)
+  leads        Int          @default(0)
+  spend        Float        @default(0)
+  cpl          Float?       // cost per lead
+  ctr          Float?       // click-through rate
+
+  topCity      String?
+  topAngle     String?
+
+  // JSON breakdowns: { cityName: { impressions, clicks, leads, spend } }
+  citySummary  Json?
+  // { angle: { leads, spend, cpl } }
+  angleSummary Json?
+
+  @@index([campaignId, snappedAt])
+}
+
+// Singleton — tracks whether automation is running and the active campaign.
+model MetaAutomationState {
+  id                    Int       @id @default(1)
+  isRunning             Boolean   @default(false)
+  activeCampaignId      String?
+  lastOptimizedAt       DateTime?
+  lastInsightsFetchAt   DateTime?
+  lastCreativeRefreshAt DateTime?
+  lastActionTaken       String?
+  lastActionAt          DateTime?
+  consecutiveErrors     Int       @default(0)
+  error                 String?   @db.Text
+  updatedAt             DateTime  @updatedAt
+}
+
+// AI-generated plain-English review of campaign performance.
+model MetaAiReview {
+  id              String       @id @default(cuid())
+  campaignId      String
+  campaign        MetaCampaign @relation(fields: [campaignId], references: [id])
+  type            String       // "pre-launch" | "performance"
+  summary         String       @db.Text
+  topAngle        String?
+  topCity         String?
+  weaknesses      String?      @db.Text
+  recommendations String?      @db.Text
+  createdAt       DateTime     @default(now())
+
+  @@index([campaignId, createdAt])
+}
+
 // ── Instagram Auto-Publisher ──────────────────────────────────────────────────
 // Uses the official Meta Graph API to post feed posts + stories automatically.
 // 3x/week: Tue 7 AM ET · Wed 12 PM ET · Thu 6:30 PM ET

@@ -64,6 +64,7 @@ export default function TopNav() {
       <NavLink href="/instagram" label="Instagram" />
       <NavLink href="/instagram-ai" label="IG Creator" highlight />
       <NavLink href="/ads" label="Google Ads" highlight />
+      <NavLink href="/meta-ads" label="Meta Ads" highlight />
     </nav>
   );
 }
