@@ -66,9 +66,10 @@ export async function publishMedia(
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Best days/times for construction contractor audience (South Florida):
-//   Tuesday   7:00–7:14 AM ET  — before the job-site day starts
-//   Wednesday 12:00–12:14 PM ET — lunch-break scroll
-//   Thursday  18:30–18:44 ET   — evening after work
+//   Tuesday   7:00–7:29 AM ET  — before the job-site day starts
+//   Wednesday 12:00–12:29 PM ET — lunch-break scroll
+//   Thursday  18:30–18:59 ET   — evening after work
+// Windows are 30 min wide so the every-15-min cron has 2 chances to fire.
 
 export type WindowKey = 'tue-7am' | 'wed-12pm' | 'thu-630pm';
 
@@ -89,9 +90,9 @@ function etParts(): { wd: string; h: number; m: number } {
 
 export function currentPublishWindow(): WindowResult {
   const { wd, h, m } = etParts();
-  if (wd === 'Tue' && h === 7  && m < 15)                   return { active: true, key: 'tue-7am' };
-  if (wd === 'Wed' && h === 12 && m < 15)                   return { active: true, key: 'wed-12pm' };
-  if (wd === 'Thu' && h === 18 && m >= 30 && m < 45)        return { active: true, key: 'thu-630pm' };
+  if (wd === 'Tue' && h === 7  && m < 30)                   return { active: true, key: 'tue-7am' };
+  if (wd === 'Wed' && h === 12 && m < 30)                   return { active: true, key: 'wed-12pm' };
+  if (wd === 'Thu' && h === 18 && m >= 30)                  return { active: true, key: 'thu-630pm' };
   return { active: false };
 }
 
