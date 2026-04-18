@@ -234,11 +234,12 @@ export async function createAdSet(params: AdSetParams): Promise<string> {
   const result = await metaPost<{ id: string }>(`${adAccountId}/adsets`, {
     name: params.name,
     campaign_id: params.campaignId,
-    daily_budget: params.dailyBudgetCents, // Meta accepts cents
+    daily_budget: params.dailyBudgetCents,
     billing_event: "IMPRESSIONS",
     optimization_goal: "LEAD_GENERATION",
     bid_strategy: "LOWEST_COST_WITHOUT_CAP",
     targeting: params.targeting,
+    promoted_object: { page_id: getPageId() },
     lead_gen_form_id: params.leadFormId,
     status: "ACTIVE",
     destination_type: "ON_AD",
