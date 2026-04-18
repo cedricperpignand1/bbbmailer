@@ -54,7 +54,7 @@ export async function buildCityTargeting(
     age_min: 24,
     age_max: 65,
     publisher_platforms: ["facebook", "instagram"],
-    facebook_positions: ["feed", "marketplace", "video_feeds"],
+    facebook_positions: ["feed", "marketplace"],
     instagram_positions: ["stream", "story", "reels", "explore"],
   };
 }

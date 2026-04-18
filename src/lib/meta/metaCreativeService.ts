@@ -5,6 +5,7 @@
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { uploadAdImage } from "./metaApiClient";
+import { stampAndSaveImage } from "@/lib/imageStamp";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -216,8 +217,17 @@ export async function generateCreativeVariants(
         throw new Error(`DALL-E image generation returned null for angle ${angle}`);
       }
 
-      // Upload raw DALL-E image to Meta (Meta renders headline as ad copy separately)
-      const metaImageHash = await uploadAdImage(imageUrl);
+      // Stamp headline + logo (same as Instagram pipeline)
+      const stampedDataUri = await stampAndSaveImage(imageUrl, copy.headline);
+      const stampedBase64  = stampedDataUri.replace(/^data:image\/jpeg;base64,/, '');
+
+      // Save stamped image to igImageStore so we can serve it via public URL
+      const stored  = await prisma.igImageStore.create({ data: { data: stampedBase64 } });
+      const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || 'https://bbbmailer.vercel.app').replace(/\/$/, '');
+      const publicImageUrl = `${baseUrl}/api/ig-publish/img/${stored.id}`;
+
+      // Upload to Meta from our own public URL (avoids DALL-E expiry issues)
+      const metaImageHash = await uploadAdImage(publicImageUrl);
 
       // Save variant to DB
       const variant = await prisma.metaCreativeVariant.create({
@@ -229,7 +239,7 @@ export async function generateCreativeVariants(
           description: copy.description ?? "",
           ctaType: copy.ctaType,
           imagePrompt: base.imagePrompt,
-          imageUrl,
+          imageUrl: publicImageUrl,
           metaImageHash,
         },
       });
