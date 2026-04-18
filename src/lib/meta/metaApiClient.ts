@@ -121,19 +121,19 @@ export async function searchGeoLocation(
 export async function uploadAdImage(imageUrl: string, buffer?: Buffer): Promise<string> {
   const adAccountId = getAdAccountId();
 
-  let imgBuffer: ArrayBuffer;
+  let imageBlob: Blob;
   if (buffer) {
-    imgBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    imageBlob = new Blob([buffer], { type: "image/jpeg" });
   } else {
     const imgRes = await fetch(imageUrl);
     if (!imgRes.ok) throw new Error(`Failed to download image from ${imageUrl}: HTTP ${imgRes.status}`);
-    imgBuffer = await imgRes.arrayBuffer();
+    imageBlob = new Blob([await imgRes.arrayBuffer()], { type: "image/jpeg" });
   }
 
   // Upload as multipart/form-data
   const form = new FormData();
   form.append("access_token", getToken());
-  form.append("bytes", new Blob([imgBuffer], { type: "image/jpeg" }), "ad_image.jpg");
+  form.append("bytes", imageBlob, "ad_image.jpg");
 
   const res = await fetch(`${GRAPH}/${adAccountId}/adimages`, {
     method: "POST",
