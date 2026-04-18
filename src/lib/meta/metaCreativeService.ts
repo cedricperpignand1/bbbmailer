@@ -5,7 +5,6 @@
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { uploadAdImage } from "./metaApiClient";
-import { stampAndSaveImage } from "@/lib/imageStamp";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -217,15 +216,10 @@ export async function generateCreativeVariants(
         throw new Error(`DALL-E image generation returned null for angle ${angle}`);
       }
 
-      // Stamp headline + logo onto image (same pipeline as Instagram posts)
-      const stampedDataUri = await stampAndSaveImage(imageUrl, copy.headline);
-      const stampedBase64  = stampedDataUri.replace(/^data:image\/jpeg;base64,/, '');
-      const stampedBuffer  = Buffer.from(stampedBase64, 'base64');
+      // Upload raw DALL-E image to Meta (Meta renders headline as ad copy separately)
+      const metaImageHash = await uploadAdImage(imageUrl);
 
-      // Upload stamped image to Meta
-      const metaImageHash = await uploadAdImage(imageUrl, stampedBuffer);
-
-      // Save variant to DB (store stamped data URI so UI can preview it)
+      // Save variant to DB
       const variant = await prisma.metaCreativeVariant.create({
         data: {
           campaignId,
@@ -235,7 +229,7 @@ export async function generateCreativeVariants(
           description: copy.description ?? "",
           ctaType: copy.ctaType,
           imagePrompt: base.imagePrompt,
-          imageUrl: stampedDataUri,
+          imageUrl,
           metaImageHash,
         },
       });
