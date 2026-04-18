@@ -176,8 +176,6 @@ export async function createLeadForm(formName: string): Promise<string> {
     thank_you_page: {
       title: "You're in!",
       body: "Welcome to Builders Bid Book. We'll reach out soon with local project activity for your area.",
-      cta_type: "VIEW_WEBSITE",
-      cta_link_url: process.env.META_FOLLOWUP_URL ?? "https://buildersbidbook.com",
     },
     locale: "EN_US",
   });
