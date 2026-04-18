@@ -291,6 +291,7 @@ export async function createAdCreative(
     image_hash: params.imageHash,
     message: params.primaryText,
     name: params.headline,
+    link: "https://buildersbidbook.com",
   };
 
   if (params.description) {
