@@ -4,17 +4,6 @@
 
 import { searchGeoLocation } from "./metaApiClient";
 
-// ── Construction interest IDs ─────────────────────────────────────────────────
-// These are stable Meta interest IDs for construction-related categories.
-// They act as SIGNALS to Meta's ML — Advantage+ audience will expand from here.
-const CONSTRUCTION_INTERESTS = [
-  { id: "6003200935112", name: "Construction" },
-  { id: "6003101461922", name: "General contractor" },
-  { id: "6002966965485", name: "Building material" },
-  { id: "6003243562112", name: "Home improvement" },
-  { id: "6017253486583", name: "Real estate development" },
-  { id: "6003103780983", name: "Architecture" },
-];
 
 // Simple in-memory cache for geo keys to avoid repeated API calls in one run.
 const geoCache = new Map<string, string | null>();
@@ -39,7 +28,6 @@ export type TargetingPayload = {
   };
   age_min: number;
   age_max: number;
-  flexible_spec: { interests: { id: string; name: string }[] }[];
   publisher_platforms: string[];
   facebook_positions: string[];
   instagram_positions: string[];
@@ -65,8 +53,6 @@ export async function buildCityTargeting(
     },
     age_min: 24,
     age_max: 65,
-    // Advantage+ audience seed — Meta expands from these interest signals
-    flexible_spec: [{ interests: CONSTRUCTION_INTERESTS }],
     publisher_platforms: ["facebook", "instagram"],
     facebook_positions: ["feed", "marketplace", "video_feeds"],
     instagram_positions: ["stream", "story", "reels", "explore"],
