@@ -203,6 +203,7 @@ export async function createMetaCampaign(
       status: "ACTIVE",
       special_ad_categories: [],
       buying_type: "AUCTION",
+      is_adset_budget_sharing_enabled: false,
     }
   );
 
