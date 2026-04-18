@@ -123,7 +123,7 @@ export async function uploadAdImage(imageUrl: string, buffer?: Buffer): Promise<
 
   let imageBlob: Blob;
   if (buffer) {
-    imageBlob = new Blob([buffer], { type: "image/jpeg" });
+    imageBlob = new Blob([new Uint8Array(buffer)], { type: "image/jpeg" });
   } else {
     const imgRes = await fetch(imageUrl);
     if (!imgRes.ok) throw new Error(`Failed to download image from ${imageUrl}: HTTP ${imgRes.status}`);
