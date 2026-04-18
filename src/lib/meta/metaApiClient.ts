@@ -115,16 +115,20 @@ export async function searchGeoLocation(
 
 /**
  * Upload an image to Meta's ad images endpoint. Returns the image hash.
- * Downloads the image first (DALL-E URLs are temporary and Meta can't fetch them),
- * then uploads as multipart/form-data bytes.
+ * Accepts an optional pre-built buffer (e.g. stamped image). If not provided,
+ * downloads from imageUrl. Uploads as multipart/form-data bytes.
  */
-export async function uploadAdImage(imageUrl: string): Promise<string> {
+export async function uploadAdImage(imageUrl: string, buffer?: Buffer): Promise<string> {
   const adAccountId = getAdAccountId();
 
-  // Download image to buffer
-  const imgRes = await fetch(imageUrl);
-  if (!imgRes.ok) throw new Error(`Failed to download image from ${imageUrl}: HTTP ${imgRes.status}`);
-  const imgBuffer = await imgRes.arrayBuffer();
+  let imgBuffer: ArrayBuffer;
+  if (buffer) {
+    imgBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  } else {
+    const imgRes = await fetch(imageUrl);
+    if (!imgRes.ok) throw new Error(`Failed to download image from ${imageUrl}: HTTP ${imgRes.status}`);
+    imgBuffer = await imgRes.arrayBuffer();
+  }
 
   // Upload as multipart/form-data
   const form = new FormData();

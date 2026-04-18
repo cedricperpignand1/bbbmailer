@@ -5,6 +5,7 @@
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { uploadAdImage } from "./metaApiClient";
+import { stampAndSaveImage } from "@/lib/imageStamp";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -40,7 +41,7 @@ const COPY_BANK: AdCopy[] = [
     description: "Find projects. Win more bids.",
     ctaType: "SIGN_UP",
     imagePrompt:
-      "A clean, professional digital platform on a laptop screen showing a map of a city with multiple construction project location pins, cobalt blue (#1055FF) and white color scheme, modern flat UI design, aerial-view city in the background, bright and professional, no text visible, no logos",
+      "Open laptop on a folding table at a South Florida construction setting showing a clean map-based platform UI with cobalt blue (#1055FF) location pins marking active construction projects across a city grid, rolled blueprints nearby, bright tropical daylight, premium flat modern ad creative style. Keep lower-left area visually open. No text, no logos, no watermarks.",
   },
   {
     angle: "find-active-projects",
@@ -50,7 +51,7 @@ const COPY_BANK: AdCopy[] = [
     description: "Built for subcontractors.",
     ctaType: "SIGN_UP",
     imagePrompt:
-      "Aerial view of an active construction site in a South Florida city, workers and equipment visible, surrounding suburban area, bright blue sky, vibrant and professional photography style, clean composition, no text, no logos",
+      "Drone aerial view of a South Florida residential neighborhood with several lots visibly under construction, palm canopy, bright tropical midday light, clean premium real estate editorial style, vivid blue sky. Keep lower-left area clean for text overlay. No text, no logos, no watermarks.",
   },
   {
     angle: "track-before-others",
@@ -60,7 +61,7 @@ const COPY_BANK: AdCopy[] = [
     description: "Be first. Win more.",
     ctaType: "SIGN_UP",
     imagePrompt:
-      "Two professional contractors in hard hats and work clothes looking at a tablet showing a digital map with construction activity markers, outdoor construction site in background, bright South Florida daylight, confident and professional mood, no text visible",
+      "Two professional contractors in hard hats shown from behind or side profile only, looking at a tablet displaying a digital map with cobalt blue construction activity pins, active South Florida construction site in background, bright midday daylight, confident premium ad photography. Open lower-left for text. No text, no logos, no watermarks.",
   },
   {
     angle: "built-for-subs",
@@ -70,7 +71,7 @@ const COPY_BANK: AdCopy[] = [
     description: "Join free. Start finding work.",
     ctaType: "SIGN_UP",
     imagePrompt:
-      "Confident subcontractor in professional work attire using a smartphone app, construction site visible in background, bright South Florida setting, modern and premium feel, looking directly at camera, no text, no logos",
+      "New residential wood framing going up in a South Florida neighborhood, roof trusses and stud walls, premium editorial construction photography, vivid blue sky, palm trees, bright sun, clean crisp details. Strong framing structure in upper half, clean negative space in bottom-left for text. No people, no text, no logos, no watermarks.",
   },
   {
     angle: "project-intel",
@@ -80,7 +81,7 @@ const COPY_BANK: AdCopy[] = [
     description: "Smarter bidding starts here.",
     ctaType: "SIGN_UP",
     imagePrompt:
-      "Clean modern data dashboard on a monitor showing construction project activity across a metropolitan area map, blue data visualization with city districts highlighted, professional business software aesthetic, no text visible, no logos",
+      "Clean desk flat lay with a printed satellite-style city map marked with cobalt blue project location pins, a hard hat, permit papers, measuring tape, sharp bright studio lighting, premium marketing creative style. Map concentrated upper-right, clean left side open for text. No text, no logos, no watermarks.",
   },
   {
     angle: "more-opportunities",
@@ -90,7 +91,7 @@ const COPY_BANK: AdCopy[] = [
     description: "Try it free today.",
     ctaType: "SIGN_UP",
     imagePrompt:
-      "Multiple active construction projects visible across a sunny South Florida city skyline, construction cranes, partially built structures, vibrant and energetic aerial perspective, blue sky, bright and optimistic, no text",
+      "Bright South Florida city skyline with multiple visible construction cranes and partially-built structures, vivid blue sky, vibrant and energetic aerial perspective, optimistic and premium photography feel. Skyline fills upper two-thirds, clean lower-left open for text overlay. No text, no logos, no watermarks.",
   },
 ];
 
@@ -211,17 +212,19 @@ export async function generateCreativeVariants(
       // Generate image
       const imageUrl = await generateAdImage(base.imagePrompt);
 
-      // Upload to Meta immediately (DALL-E URLs expire in ~1 hour)
-      let metaImageHash: string | undefined;
-      if (imageUrl) {
-        try {
-          metaImageHash = await uploadAdImage(imageUrl);
-        } catch (uploadErr) {
-          console.warn(`[metaCreative] Image upload failed for angle ${angle}:`, uploadErr);
-        }
+      if (!imageUrl) {
+        throw new Error(`DALL-E image generation returned null for angle ${angle}`);
       }
 
-      // Save variant to DB
+      // Stamp headline + logo onto image (same pipeline as Instagram posts)
+      const stampedDataUri = await stampAndSaveImage(imageUrl, copy.headline);
+      const stampedBase64  = stampedDataUri.replace(/^data:image\/jpeg;base64,/, '');
+      const stampedBuffer  = Buffer.from(stampedBase64, 'base64');
+
+      // Upload stamped image to Meta
+      const metaImageHash = await uploadAdImage(imageUrl, stampedBuffer);
+
+      // Save variant to DB (store stamped data URI so UI can preview it)
       const variant = await prisma.metaCreativeVariant.create({
         data: {
           campaignId,
@@ -231,8 +234,8 @@ export async function generateCreativeVariants(
           description: copy.description ?? "",
           ctaType: copy.ctaType,
           imagePrompt: base.imagePrompt,
-          imageUrl: imageUrl ?? undefined,
-          metaImageHash: metaImageHash ?? undefined,
+          imageUrl: stampedDataUri,
+          metaImageHash,
         },
       });
 
