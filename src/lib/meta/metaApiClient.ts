@@ -123,16 +123,14 @@ export async function uploadAdImage(imageUrl: string): Promise<string> {
 
   const imgRes = await fetch(imageUrl);
   if (!imgRes.ok) throw new Error(`Failed to download image from ${imageUrl}: HTTP ${imgRes.status}`);
-  const imageBlob = new Blob([await imgRes.arrayBuffer()], { type: "image/png" });
+  const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+  const base64 = imgBuffer.toString("base64");
 
-  // Upload as multipart/form-data
-  const form = new FormData();
-  form.append("access_token", getToken());
-  form.append("bytes", imageBlob, "ad_image.jpg");
-
+  // Meta adimages API expects base64-encoded bytes as JSON
   const res = await fetch(`${GRAPH}/${adAccountId}/adimages`, {
     method: "POST",
-    body: form,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ access_token: getToken(), bytes: base64 }),
   });
 
   const data = await res.json() as {
