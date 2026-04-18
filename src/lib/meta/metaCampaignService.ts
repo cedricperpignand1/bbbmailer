@@ -167,7 +167,7 @@ export async function launchCampaign(params: LaunchParams): Promise<LaunchResult
 
     // ── Create ad sets + ads per city ──────────────────────────────────────
     const pageId = getPageId();
-    const igActorId = getIgActorId();
+    const igActorId = null; // skip IG actor — not required for lead gen ads
 
     for (const city of params.cities) {
       const targeting = targetingMap.get(city);
