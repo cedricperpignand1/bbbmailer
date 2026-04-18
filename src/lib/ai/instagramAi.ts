@@ -343,6 +343,51 @@ const SCENE_BANK: Scene[] = [
     layoutHint: 'Map concentrated upper-right, clean left side',
   },
   {
+    id: 'D4',
+    label: 'Platform map on laptop — city construction pins',
+    category: 'tech',
+    description:
+      'Clean professional digital platform on a laptop screen showing a city map with multiple cobalt-blue construction project location pins (#1055FF color scheme), modern flat UI design, aerial-view city visible in background, bright studio lighting, premium product-ad composition',
+    allowPeople: false,
+    layoutHint: 'Laptop screen centered, negative space lower-left for headline',
+  },
+  {
+    id: 'D5',
+    label: 'Contractor using smartphone app on job site',
+    category: 'tech',
+    description:
+      'Confident subcontractor in professional work attire and hard hat using a smartphone showing a map-based app with blue location markers, active South Florida construction site visible in background, bright midday light, modern premium ad photography, shot from behind or side profile',
+    allowPeople: true,
+    layoutHint: 'Person right-third, phone prominent, open left side for text',
+  },
+  {
+    id: 'D6',
+    label: 'Two contractors reviewing digital project map on tablet',
+    category: 'tech',
+    description:
+      'Two professional contractors in hard hats looking at a tablet showing a digital map with construction activity markers and blue pins, outdoor South Florida construction site in background, bright daylight, confident and professional mood, both shown from behind or side profile only',
+    allowPeople: true,
+    layoutHint: 'Subjects upper-right, tablet screen visible, open lower-left',
+  },
+  {
+    id: 'D7',
+    label: 'Construction intelligence dashboard on monitor',
+    category: 'tech',
+    description:
+      'Clean modern data dashboard on a large monitor showing construction project activity across a South Florida metropolitan area map, cobalt blue data visualization with city districts highlighted, blue pins on map, professional business software aesthetic, bright clean office setting',
+    allowPeople: false,
+    layoutHint: 'Monitor upper-center, clean negative space lower-left',
+  },
+  {
+    id: 'C4',
+    label: 'City skyline with active construction cranes',
+    category: 'aerial',
+    description:
+      'Bright South Florida city skyline with multiple visible construction cranes and partially-built structures, vibrant blue sky, optimistic aerial perspective, energetic and premium photography, clean composition that feels like opportunity and growth',
+    allowPeople: false,
+    layoutHint: 'Skyline fills upper two-thirds, preserve lower-left text area',
+  },
+  {
     id: 'D3',
     label: 'Permit stack beside laptop',
     category: 'tech',
@@ -906,10 +951,10 @@ function enhanceImagePrompt(imagePrompt: string): string {
   const parts = [
     imagePrompt,
     'Instagram 1:1 composition.',
-    'Premium bright editorial ad image.',
-    'Flat, clean, modern, bold visual style.',
-    'South Florida daylight feel.',
-    'Vivid blue sky, tropical brightness, clean contrast, sharp detail.',
+    'Premium bright clean ad creative — same visual style as a polished Meta lead-gen ad.',
+    'Flat, modern, bold, cobalt-blue-and-white color feel where applicable.',
+    'South Florida daylight feel — vivid blue sky, tropical brightness, crisp sharp detail.',
+    'If showing a screen or UI: clean flat product-ad aesthetic, blue map pins, modern dashboard, no fake text.',
     'Designed to support large bold overlay text in post-processing.',
     'Keep lower-left area visually clean for headline placement.',
     'No text, no words, no readable signs, no logos, no watermarks.',
@@ -1011,6 +1056,8 @@ STRICT OUTPUT RULES:
 - Must preserve open space for text overlay
 - Must feel bright, premium, bold, sharp, clean
 - Must feel South Florida
+- Visual style should match a polished Meta lead-gen ad: flat, modern, cobalt blue + white, product-UI-friendly
+- For tech/platform scenes: show clean dashboards, maps with blue location pins, or contractors using devices — same look as a "Zillow of construction" style ad
 - Must explicitly say no text, no logos, no watermarks
 - If people appear, obey the people rule exactly
 

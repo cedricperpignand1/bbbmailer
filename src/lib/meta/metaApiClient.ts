@@ -113,14 +113,39 @@ export async function searchGeoLocation(
 
 // ── Image upload ──────────────────────────────────────────────────────────────
 
-/** Upload an image URL to Meta's ad images endpoint. Returns the image hash. */
+/**
+ * Upload an image to Meta's ad images endpoint. Returns the image hash.
+ * Downloads the image first (DALL-E URLs are temporary and Meta can't fetch them),
+ * then uploads as multipart/form-data bytes.
+ */
 export async function uploadAdImage(imageUrl: string): Promise<string> {
   const adAccountId = getAdAccountId();
-  const result = await metaPost<{
-    images: Record<string, { hash: string; url: string }>;
-  }>(`${adAccountId}/adimages`, { url: imageUrl });
 
-  const entries = Object.values(result.images ?? {});
+  // Download image to buffer
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok) throw new Error(`Failed to download image from ${imageUrl}: HTTP ${imgRes.status}`);
+  const imgBuffer = await imgRes.arrayBuffer();
+
+  // Upload as multipart/form-data
+  const form = new FormData();
+  form.append("access_token", getToken());
+  form.append("bytes", new Blob([imgBuffer], { type: "image/jpeg" }), "ad_image.jpg");
+
+  const res = await fetch(`${GRAPH}/${adAccountId}/adimages`, {
+    method: "POST",
+    body: form,
+  });
+
+  const data = await res.json() as {
+    images?: Record<string, { hash: string; url: string }>;
+    error?: { message: string; code: number };
+  };
+
+  if (!res.ok || data.error) {
+    throw new Error(`Meta image upload failed (HTTP ${res.status}): ${JSON.stringify(data.error ?? data)}`);
+  }
+
+  const entries = Object.values(data.images ?? {});
   if (!entries[0]?.hash) {
     throw new Error("Image upload to Meta returned no hash");
   }

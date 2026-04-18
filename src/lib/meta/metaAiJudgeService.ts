@@ -57,8 +57,8 @@ Rules:
 - Approve ads that are direct, specific, and make a concrete promise
 - overall = (clarity*0.2 + specificity*0.2 + valueProposition*0.25 + leadLikelihood*0.25 + bbbAlignment*0.1)
 
-Respond ONLY with valid JSON:
-{"clarity":8,"specificity":9,"valueProposition":8,"leadLikelihood":7,"bbbAlignment":9,"overall":8.1,"verdict":"approved","notes":"Strong direct-response copy. Speaks clearly to subcontractors."}`;
+Respond ONLY with valid JSON (use your actual scores, do not copy these numbers):
+{"clarity":0,"specificity":0,"valueProposition":0,"leadLikelihood":0,"bbbAlignment":0,"overall":0.0,"verdict":"approved|needs_revision|rejected","notes":"your evaluation here"}`;
 
   try {
     const completion = await openai.chat.completions.create({
