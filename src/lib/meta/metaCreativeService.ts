@@ -201,6 +201,7 @@ export async function generateCreativeVariants(
   ];
 
   const variantIds: string[] = [];
+  const firstError: string[] = [];
 
   for (const angle of angles) {
     try {
@@ -241,8 +242,14 @@ export async function generateCreativeVariants(
 
       variantIds.push(variant.id);
     } catch (err) {
-      console.error(`[metaCreative] Failed to generate variant for angle ${angle}:`, err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[metaCreative] Failed to generate variant for angle ${angle}:`, msg);
+      firstError.push(`[${angle}] ${msg}`);
     }
+  }
+
+  if (variantIds.length === 0 && firstError.length > 0) {
+    throw new Error(`All variants failed. First error: ${firstError[0]}`);
   }
 
   return variantIds;
