@@ -844,11 +844,13 @@ model MetaAiReview {
 // Uses the official Meta Graph API to post feed posts + stories automatically.
 // 3x/week: Tue 7 AM ET · Wed 12 PM ET · Thu 6:30 PM ET
 model IgPublishConfig {
-  id          Int      @id @default(1)
-  igUserId    String   @default("")   // Instagram Business/Creator User ID
-  accessToken String   @default("")   // Long-lived Page Access Token
-  isActive    Boolean  @default(false)
-  updatedAt   DateTime @updatedAt
+  id              Int       @id @default(1)
+  igUserId        String    @default("")   // Instagram Business/Creator User ID
+  accessToken     String    @default("")   // Long-lived Page Access Token
+  isActive        Boolean   @default(false)
+  lastCronAt      DateTime?              // When the cron last called run-due
+  lastSkipReason  String?               // Why the last run was skipped (or "posted")
+  updatedAt       DateTime  @updatedAt
 
   logs IgPublishLog[]
 }

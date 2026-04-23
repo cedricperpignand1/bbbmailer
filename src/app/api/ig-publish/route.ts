@@ -21,7 +21,11 @@ export async function GET() {
   const { accessToken: _, ...safeConfig } = config;
   const connected = !!config.igUserId && !!config.accessToken;
 
-  return NextResponse.json({ config: { ...safeConfig, connected }, logs });
+  return NextResponse.json({ config: { ...safeConfig, connected }, logs, nextWindows: [
+    'Tue 7:00–7:29 AM ET',
+    'Wed 12:00–12:29 PM ET',
+    'Thu 6:30–6:59 PM ET',
+  ] });
 }
 
 // POST — save credentials or toggle

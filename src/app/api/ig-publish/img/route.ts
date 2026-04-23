@@ -15,8 +15,9 @@ export async function GET(req: NextRequest) {
   const buf = Buffer.from(img.data, 'base64');
   return new NextResponse(buf, {
     headers: {
-      'Content-Type':  'image/jpeg',
-      'Cache-Control': 'public, max-age=86400',
+      'Content-Type':   'image/jpeg',
+      'Content-Length': String(buf.length),
+      'Cache-Control':  'public, max-age=86400',
     },
   });
 }

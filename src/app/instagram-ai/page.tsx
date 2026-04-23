@@ -20,6 +20,8 @@ type PublishConfig = {
   igUserId: string;
   isActive: boolean;
   connected: boolean;
+  lastCronAt?: string | null;
+  lastSkipReason?: string | null;
 };
 
 type PublishLog = {
@@ -366,6 +368,29 @@ function AutoPublisherPanel() {
           {forceMsg}
         </p>
       )}
+
+      {/* Cron diagnostics */}
+      <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 space-y-1.5">
+        <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">Cron Status</p>
+        <div className="flex items-start gap-2 text-xs">
+          <span className="text-slate-500 shrink-0">Last fired:</span>
+          <span className="font-semibold text-slate-800">
+            {config?.lastCronAt
+              ? new Date(config.lastCronAt).toLocaleString(undefined, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+              : "Never — cron has not run yet"}
+          </span>
+        </div>
+        <div className="flex items-start gap-2 text-xs">
+          <span className="text-slate-500 shrink-0">Last result:</span>
+          <span className={`font-semibold ${config?.lastSkipReason?.startsWith("posted") ? "text-emerald-700" : "text-amber-700"}`}>
+            {config?.lastSkipReason || "—"}
+          </span>
+        </div>
+        <p className="text-[10px] text-slate-400 pt-0.5">
+          Cron fires every 15 min. Only posts in 3 windows/week (Tue 7am · Wed 12pm · Thu 6:30pm ET).
+          If &ldquo;Never&rdquo; after 30+ min, check Vercel cron settings.
+        </p>
+      </div>
 
       {/* Recent log */}
       {logs.length > 0 && (

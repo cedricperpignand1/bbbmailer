@@ -13,6 +13,15 @@ export async function GET(req: NextRequest) {
   return POST(req);
 }
 
+/** Helper: record why this cron tick was skipped and return the skip response */
+async function skipWith(reason: string) {
+  await prisma.igPublishConfig.update({
+    where: { id: 1 },
+    data: { lastCronAt: new Date(), lastSkipReason: reason },
+  }).catch(() => {/* ignore if row doesn't exist yet */});
+  return NextResponse.json({ skip: true, reason });
+}
+
 export async function POST(req: NextRequest) {
   // Optional cron key guard
   const cronKey = req.headers.get('x-cron-key');
@@ -26,20 +35,20 @@ export async function POST(req: NextRequest) {
   const config = await prisma.igPublishConfig.upsert({
     where: { id: 1 },
     create: { id: 1 },
-    update: {},
+    update: { lastCronAt: new Date() },
   });
 
   if (!config.igUserId || !config.accessToken) {
-    return NextResponse.json({ skip: true, reason: 'not_connected' });
+    return skipWith('not_connected — enter IG User ID + token in the panel');
   }
   if (!config.isActive && !force) {
-    return NextResponse.json({ skip: true, reason: 'not_active' });
+    return skipWith('not_active — toggle Active on in the panel');
   }
 
   // ── 2. Check publish window ───────────────────────────────────────────────
   const window = currentPublishWindow();
   if (!window.active && !force) {
-    return NextResponse.json({ skip: true, reason: 'outside_window' });
+    return skipWith('outside_window — next windows: Tue 7am · Wed 12pm · Thu 6:30pm ET');
   }
 
   const windowKey = window.active ? window.key : 'force';
@@ -51,7 +60,7 @@ export async function POST(req: NextRequest) {
       where: { dateStr_windowKey: { dateStr, windowKey } },
     });
     if (existing) {
-      return NextResponse.json({ skip: true, reason: 'already_ran', log: existing });
+      return skipWith(`already_ran for ${windowKey} on ${dateStr}`);
     }
   }
 
@@ -100,6 +109,15 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // ── 6c. Pre-warm image endpoints so Meta doesn't hit a cold serverless start ──
+  // Instagram downloads the image URL immediately — if the function is cold it fails.
+  await Promise.all([
+    fetch(imageUrl,      { method: 'HEAD' }).catch(() => {}),
+    fetch(storyImageUrl, { method: 'HEAD' }).catch(() => {}),
+  ]);
+  // Small buffer for the warm instance to be ready
+  await new Promise(r => setTimeout(r, 1500));
+
   // ── 7. Publish to Instagram (feed post + story) ───────────────────────────
   let feedPostId  = '';
   let storyPostId = '';
@@ -131,23 +149,34 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 8. Log the result ─────────────────────────────────────────────────────
-  const logEntry = await prisma.igPublishLog.upsert({
-    where:  { dateStr_windowKey: { dateStr, windowKey } },
-    create: {
-      configId: 1, dateStr, windowKey,
-      headline: content.headline,
-      caption:  content.caption,
-      imageFile: String(stored.id),
-      feedPostId, storyPostId, status, error: errorMsg,
-    },
-    update: {
-      headline: content.headline,
-      caption:  content.caption,
-      imageFile: String(stored.id),
-      feedPostId, storyPostId, status, error: errorMsg,
-      publishedAt: new Date(),
-    },
-  });
+  const [logEntry] = await Promise.all([
+    prisma.igPublishLog.upsert({
+      where:  { dateStr_windowKey: { dateStr, windowKey } },
+      create: {
+        configId: 1, dateStr, windowKey,
+        headline: content.headline,
+        caption:  content.caption,
+        imageFile: String(stored.id),
+        feedPostId, storyPostId, status, error: errorMsg,
+      },
+      update: {
+        headline: content.headline,
+        caption:  content.caption,
+        imageFile: String(stored.id),
+        feedPostId, storyPostId, status, error: errorMsg,
+        publishedAt: new Date(),
+      },
+    }),
+    prisma.igPublishConfig.update({
+      where: { id: 1 },
+      data: {
+        lastCronAt: new Date(),
+        lastSkipReason: status === 'success'
+          ? `posted — ${windowKey} on ${dateStr}`
+          : `${status}: ${errorMsg?.slice(0, 100) ?? 'unknown error'}`,
+      },
+    }),
+  ]);
 
   return NextResponse.json({ ok: status !== 'failed', status, feedPostId, storyPostId, error: errorMsg, log: logEntry });
 }
