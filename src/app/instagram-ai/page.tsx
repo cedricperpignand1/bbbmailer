@@ -31,6 +31,7 @@ type PublishLog = {
   headline: string;
   feedPostId: string;
   storyPostId: string;
+  videoUrl?: string;
   status: string;
   error?: string;
   publishedAt: string;
@@ -207,6 +208,7 @@ function AutoPublisherPanel() {
   const [logs, setLogs] = useState<PublishLog[]>([]);
   const [toggling, setToggling] = useState(false);
   const [forceRunning, setForceRunning] = useState(false);
+  const [videoRunning, setVideoRunning] = useState(false);
   const [forceMsg, setForceMsg] = useState<string | null>(null);
   const [oauthMsg, setOauthMsg] = useState<string | null>(null);
 
@@ -273,6 +275,27 @@ function AutoPublisherPanel() {
       setForceMsg("Network error");
     } finally {
       setForceRunning(false);
+    }
+  }
+
+  async function postVideo() {
+    setVideoRunning(true);
+    setForceMsg(null);
+    try {
+      const r = await fetch("/api/ig-publish/run-due?force=1&video=1", { method: "POST" });
+      const d = await r.json();
+      if (d.skip) {
+        setForceMsg(`Skipped: ${d.reason}`);
+      } else if (d.ok) {
+        setForceMsg(`Reel posted! · Concept: ${d.conceptAngle ?? "—"} · ID: ${d.feedPostId || "—"}`);
+        await loadData();
+      } else {
+        setForceMsg(`Video error: ${d.error ?? d.status}`);
+      }
+    } catch {
+      setForceMsg("Network error");
+    } finally {
+      setVideoRunning(false);
     }
   }
 
@@ -347,10 +370,17 @@ function AutoPublisherPanel() {
           <div className="flex items-center gap-2">
             <button
               onClick={forceRun}
-              disabled={forceRunning}
+              disabled={forceRunning || videoRunning}
               className="rounded-lg border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 disabled:opacity-50"
             >
               {forceRunning ? "Posting…" : "Post Now"}
+            </button>
+            <button
+              onClick={postVideo}
+              disabled={videoRunning || forceRunning}
+              className="rounded-lg border border-pink-300 bg-gradient-to-r from-pink-500 to-purple-600 px-2.5 py-1 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50 shadow-sm"
+            >
+              {videoRunning ? "Generating Reel…" : "Post Video"}
             </button>
             <button
               onClick={disconnect}
@@ -404,7 +434,8 @@ function AutoPublisherPanel() {
                   <p className="text-xs font-semibold text-slate-800 truncate">{l.headline || "—"}</p>
                   <p className="text-[10px] text-slate-400">
                     {windowLabels[l.windowKey] ?? l.windowKey} · {l.dateStr}
-                    {l.feedPostId ? ` · Feed ✓` : ""}
+                    {l.videoUrl ? ` · Reel ✓` : ""}
+                    {l.feedPostId && !l.videoUrl ? ` · Feed ✓` : ""}
                     {l.storyPostId ? ` · Story ✓` : ""}
                   </p>
                   {l.error && <p className="text-[10px] text-red-500 truncate">{l.error}</p>}

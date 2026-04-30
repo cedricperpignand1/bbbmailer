@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
   // Optional cron key guard
   const cronKey = req.headers.get('x-cron-key');
   const force = new URL(req.url).searchParams.get('force') === '1';
+  const forceVideo = new URL(req.url).searchParams.get('video') === '1';
 
   if (cronKey && process.env.AUTO_CRON_KEY && cronKey !== process.env.AUTO_CRON_KEY) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -66,10 +67,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── 4. Branch: Thursday = AI video Reel, other days = AI image post ────────
-  const isThursday = windowKey === 'thu-630pm' || (force && new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long' }) === 'Thursday');
+  // ── 4. Branch: Thursday or ?video=1 = AI video Reel, other days = AI image ──
+  const isVideoRun = forceVideo || windowKey === 'thu-630pm';
 
-  if (isThursday) {
+  if (isVideoRun) {
     return runThursdayReel(req, config, windowKey, dateStr, force);
   }
   return runImagePost(config, windowKey, dateStr);
