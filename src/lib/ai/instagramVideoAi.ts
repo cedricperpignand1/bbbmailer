@@ -1,10 +1,13 @@
 // src/lib/ai/instagramVideoAi.ts
 // Thursday Instagram Reel content engine.
-// Every concept is tied directly to BuildersBidBook's core value:
-// "Find active construction projects before they start — reach owners early, bid confidently."
 //
-// Flow: GPT-4o picks concept → DALL-E generates branded first frame →
-//       stampAndSaveImage burns headline on it → minimax/video-01-live animates it.
+// All concepts are residential South Florida — luxury homes, gated communities,
+// new construction neighborhoods. NO commercial highrises. NO tower cranes.
+//
+// Flow: GPT-4o picks concept + writes caption →
+//       DALL-E generates clean first-frame image →
+//       minimax/video-01-live animates it (clean video, no text blur) →
+//       Story gets the stamped image with headline + logo (fully readable text).
 
 import OpenAI from 'openai';
 import { BBB_BRAND_CONTEXT } from './instagramAi';
@@ -12,234 +15,232 @@ import { BBB_BRAND_CONTEXT } from './instagramAi';
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 26 EXPLOSIVE VIDEO CONCEPTS — each one directly promotes BBB's value prop
+// 26 RESIDENTIAL VIDEO CONCEPTS FOR BUILDERSBIDBOOK
 //
-// dalleImagePrompt → what the STILL first-frame image looks like (DALL-E 3)
-// replicatePrompt  → how minimax should ANIMATE that image (motion description)
+// dalleImagePrompt → still first-frame image (DALL-E 3, clean no text)
+// replicatePrompt  → subtle motion description for minimax (keep it gentle)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const VIDEO_CONCEPTS = [
 
-  // ── PERMIT DISCOVERY / DATA ADVANTAGE ─────────────────────────────────────
+  // ── PERMIT DISCOVERY ──────────────────────────────────────────────────────
   {
-    angle: 'permit-map-explosion',
+    angle: 'permit-map-residential',
     viralHook: 'data-shock',
     headline: 'New permits drop every morning.',
-    dalleImagePrompt: 'Top-down aerial view of South Florida map with glowing blue construction permit location pins clustered densely across Miami-Dade, Broward, and Palm Beach counties. Hundreds of bright royal blue (#1055FF) pins. Dark map background, pins glowing like city lights. Tech-forward, data visualization style. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'New glowing blue permit pins rapidly burst onto the South Florida map one after another, spreading across Miami-Dade, Broward, and Palm Beach counties. Each pin pulses and glows as it appears. Camera slowly zooms in toward Miami as pins keep dropping. Dramatic, fast, explosive energy.',
-    captionSeed: 'Every pin is a project. Every project is money.',
+    dalleImagePrompt: 'Top-down aerial view of a South Florida residential neighborhood map with glowing royal blue (#1055FF) location pins appearing across Coral Gables, Boca Raton, and Davie — each pin marking a new home construction permit. Dozens of bright blue pins on a clean street-level map. Tech-forward data visualization style. No skyscrapers. Only houses and residential streets. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'New glowing blue permit pins gently appear one by one across the residential neighborhood map, spreading from Miami toward Boca Raton. Camera slowly zooms toward a cluster of new pins in a quiet suburban neighborhood. Calm but exciting energy.',
+    captionSeed: 'Every pin is a home being built. Every home is a bid opportunity.',
   },
   {
-    angle: 'contractor-gets-alert-first',
+    angle: 'contractor-alert-on-site',
     viralHook: 'fomo-winner',
     headline: 'The contractor who sees it first wins.',
-    dalleImagePrompt: 'Close-up of a contractor\'s hand holding a smartphone on a South Florida construction site. The phone screen shows a bright BuildersBidBook-style permit alert: "NEW PERMIT — $4.2M Luxury Residence, Coral Gables, FL — Owner Contact Available." Morning golden light. Concrete and work boots visible. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'The contractor\'s phone screen lights up with a permit alert notification. The contractor immediately taps to open it, reads the project details — their face showing focused determination — then dials. Camera gently pushes in toward the phone screen.',
-    captionSeed: 'You have seconds before your competitor sees the same alert.',
+    dalleImagePrompt: 'Close-up of a contractor\'s hand holding a smartphone on a residential South Florida job site. The phone screen shows a permit alert: "NEW PERMIT — $1.8M Luxury Residence, Coral Gables, FL — Owner Contact Available." Morning golden light. Residential framing visible in background, palm trees. No commercial buildings. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The phone screen glows as the permit alert appears. The contractor\'s thumb taps the notification. Camera gently pushes in toward the phone screen, slowly revealing the owner contact details below the project address. Purposeful, focused energy.',
+    captionSeed: 'Owner name. Phone number. Email. All right there.',
   },
   {
-    angle: 'while-competitors-sleep',
+    angle: 'permits-filed-overnight',
     viralHook: 'hustle-contrast',
-    headline: 'Permits filed at 6 AM. Most contractors find out at noon.',
-    dalleImagePrompt: 'Split mood image: left half shows a dark bedroom with a contractor sleeping, alarm clock reading 6:03 AM; right half shows a bright South Florida construction site already active with a crane and workers. Bold royal blue dividing line down the center. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'Left side stays dark and still (sleeping contractor). Right side comes alive — crane begins to move, workers start walking, concrete truck pulls in. The contrast grows. Camera slowly pulls back to show both sides simultaneously. Dramatic and urgent.',
-    captionSeed: 'The permit was filed while you slept. Someone else already called.',
+    headline: 'Permits were filed while you slept.',
+    dalleImagePrompt: 'Split image: left half shows dark suburban South Florida neighborhood at night with house silhouettes under a star-filled sky; right half shows the same neighborhood at golden sunrise with active residential construction — wood framing going up, lumber trucks arriving. Bold royal blue dividing line. No commercial buildings. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The right side gradually comes alive — workers arrive at the residential construction site, a lumber truck pulls up, framing begins. The left stays dark and still. Camera slowly pulls back to show both halves. Contrast between sleeping and winning.',
+    captionSeed: 'The permit was filed at 6 AM. Did you make the call?',
   },
   {
-    angle: 'reach-owner-before-anyone',
+    angle: 'reach-homeowner-first',
     viralHook: 'relationship-edge',
-    headline: 'Most contractors never even get to talk to the owner.',
-    dalleImagePrompt: 'Confident contractor in safety vest shaking hands with a well-dressed developer/project owner in front of an empty construction lot with survey stakes. South Florida palm trees, blue sky. Contract papers visible under the developer\'s arm. Golden hour lighting. Professional, successful energy. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'The handshake begins. Camera slowly pushes in toward the joined hands. The developer smiles. Behind them, heavy equipment begins arriving on the empty lot. The job is clearly won before anyone else even knew it existed.',
-    captionSeed: 'BuildersBidBook shows you who owns the project. Before it starts.',
+    headline: 'Most contractors never even meet the homeowner.',
+    dalleImagePrompt: 'Confident contractor in safety vest shaking hands with a homeowner couple in front of an empty residential lot in a South Florida gated community. Survey stakes in the ground. Palm trees, blue sky. Plans rolled up under the contractor\'s arm. Warm, professional, residential setting. No commercial buildings. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The handshake is firm and warm. Behind them, a survey crew begins marking the lot. The homeowner gestures toward the empty land explaining their vision. Camera gently circles to show the full residential lot and neighboring homes.',
+    captionSeed: 'BuildersBidBook shows you who owns the project — before it starts.',
   },
   {
-    angle: 'bid-confidently',
-    viralHook: 'authority',
+    angle: 'project-intel-dashboard',
+    viralHook: 'platform-power',
     headline: 'Stop guessing. Start knowing.',
-    dalleImagePrompt: 'Contractor sitting at a truck dashboard in a construction site parking lot, laptop open showing a clean project intelligence dashboard with project addresses, square footage, permit values, and owner contact information. Coffee cup in holder. Focused expression. Professional, data-forward. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'The contractor types on the laptop. New projects populate the screen in real time — addresses, values, contacts. The contractor picks up the phone and dials with confidence. Camera gently pushes in toward the screen showing the rich project data.',
-    captionSeed: 'Full project intel before you make the call.',
+    dalleImagePrompt: 'Contractor sitting in a pickup truck parked in a quiet South Florida residential neighborhood, laptop open on the dashboard showing a clean construction intelligence dashboard — home addresses, permit values ($800K, $1.2M, $2.1M), owner contact info. Coffee in cupholder. Focused expression. Residential homes visible through windshield. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The contractor scrolls through new residential project listings — each one a real home address with owner contacts. A finger taps one entry to open the full details. Camera gently zooms toward the laptop screen. Purpose and confidence in every movement.',
+    captionSeed: 'Full project intel. Owner contacts. Before anyone else calls.',
   },
 
-  // ── SOUTH FLORIDA MARKET SCALE ─────────────────────────────────────────────
+  // ── SOUTH FLORIDA RESIDENTIAL MARKET ──────────────────────────────────────
   {
-    angle: 'south-florida-boom-aerial',
-    viralHook: 'market-scale-shock',
-    headline: 'The South Florida building boom is not slowing down.',
-    dalleImagePrompt: 'Dramatic wide aerial photograph of South Florida showing dozens of construction cranes and active construction sites stretching across Miami, Fort Lauderdale, and Boca Raton — all visible simultaneously. Intracoastal waterway gleaming in sunlight. Photorealistic aerial photography. 9:16 vertical.',
-    replicatePrompt: 'Drone slowly glides forward over the vast South Florida construction landscape. New cranes and job sites come into frame one after another. The sheer scale is overwhelming — construction everywhere you look. Steady, majestic, awe-inspiring forward movement.',
-    captionSeed: 'All of this is happening. Are you getting your share of these bids?',
+    angle: 'residential-neighborhood-aerial',
+    viralHook: 'market-scale',
+    headline: 'South Florida residential construction is everywhere.',
+    dalleImagePrompt: 'Wide aerial photograph of a South Florida suburban residential neighborhood showing 15-20 homes at various stages of construction — some at foundation, some framed, some nearly complete. Quiet streets, palm trees, blue sky. No commercial buildings, no skyscrapers, no cranes. Purely residential. Golden hour lighting. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'Drone drifts slowly forward over the residential neighborhood. Individual homes at different construction stages come into focus — foundations, wood frames, roofing in progress. The peaceful suburban scale of the South Florida building market reveals itself.',
+    captionSeed: 'All of this activity. How many of these homeowners have you called?',
   },
   {
-    angle: 'permits-per-day-counter',
-    viralHook: 'stat-shock',
-    headline: '47 permits filed today. How many did you know about?',
-    dalleImagePrompt: 'Bold graphic-style image: large "47" in massive white bold type against a deep royal blue background, with "NEW CONSTRUCTION PERMITS — MIAMI-DADE TODAY" in smaller white text below. Small South Florida outline map in the corner. Clean, modern, high-contrast. Photorealistic render. 9:16 vertical.',
-    replicatePrompt: 'The number counter on screen rapidly increments: 12... 23... 35... 47. Each number appears with a punch. After reaching 47, individual project pins start appearing on a map of Miami-Dade in rapid-fire succession. Camera slowly zooms in on the counter.',
-    captionSeed: 'These permits are public record. Most contractors never look.',
+    angle: 'gated-community-development',
+    viralHook: 'fomo-scale',
+    headline: 'An entire gated community going up at once.',
+    dalleImagePrompt: 'Aerial photograph of a new gated residential community in Boca Raton with 25-30 luxury homes simultaneously under construction. Lots at different stages — slabs, frames, roofs. New palm tree landscaping starting. Quiet streets, no cranes, no commercial buildings. Late afternoon Florida sun. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'Camera glides slowly over the gated community revealing home after home under construction. The scale builds — this is a major residential development with dozens of opportunities. Camera settles on one home at the framing stage, showing the craftsmanship.',
+    captionSeed: 'Every lot in here filed a permit. Did you know about them?',
   },
   {
-    angle: 'billions-active-construction',
-    viralHook: 'wealth-scale',
-    headline: '$2.4 billion in active South Florida construction right now.',
-    dalleImagePrompt: 'Epic wide angle photograph of multiple simultaneous South Florida luxury construction sites — high-rise condos, waterfront mansions, commercial plazas — all visible in one panoramic frame. Golden hour, dramatic sky, cranes silhouetted. Overwhelming scale. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'Camera drifts slowly across the massive construction panorama. Each site becomes clearer as we pass — high-rises, luxury homes, commercial buildings all going up simultaneously. The movement feels like flying above an economic boom in progress.',
-    captionSeed: 'Billions in construction. Thousands of bid opportunities. One platform.',
+    angle: 'luxury-home-permits-dropping',
+    viralHook: 'market-data',
+    headline: 'Luxury home permits filed daily in South Florida.',
+    dalleImagePrompt: 'Aerial view of an upscale South Florida residential street (Coral Gables or Pinecrest style) with several large luxury homes under construction side by side. Custom Mediterranean and modern architectural styles. Lush mature trees, manicured lots. No commercial anything. Pure luxury residential. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'Camera slowly descends toward one of the luxury homes under construction, revealing the scale and quality of the build. Beautiful wood framing, custom windows going in. Camera circles the structure gently. This is high-value residential work.',
+    captionSeed: 'High-value residential permits. Filed daily. We track every one.',
   },
   {
-    angle: 'waterfront-luxury-projects',
-    viralHook: 'luxury-fomo',
-    headline: 'The biggest contracts go to whoever calls first.',
-    dalleImagePrompt: 'Aerial photograph of Fort Lauderdale Intracoastal waterway showing two massive luxury waterfront mansion projects under simultaneous construction. Cranes visible, foundations poured, framing starting. Yachts in the canal. Turquoise water, palm trees, perfect blue sky. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'Camera glides slowly forward over the waterfront construction. Details become clearer — the scale of each mansion, the cranes at work, the high-end materials. A yacht passes below. This is the high-value contract territory most contractors never reach because they find out too late.',
-    captionSeed: 'These owners posted permits days ago. Do you have their contact info?',
-  },
-
-  // ── BEFORE/AFTER TRANSFORMATION ────────────────────────────────────────────
-  {
-    angle: 'empty-lot-permit-filed',
-    viralHook: 'opportunity-reveal',
-    headline: 'This empty lot has an active permit. Most contractors walk past it.',
-    dalleImagePrompt: 'Photorealistic image of an empty sandy lot in Coral Gables, Florida — survey stakes in the ground, a freshly posted construction permit sign on a stake at the edge. Palm trees, blue sky. The lot looks unremarkable but the permit sign is visible and detailed. Early morning light. 9:16 vertical.',
-    replicatePrompt: 'Camera slowly pushes in toward the permit sign on the empty lot. As we get closer, the permit details become readable — $3.8M new construction, contact information visible. Then the camera pulls back to show the full street with similar lots on both sides, all having hidden permit signs.',
-    captionSeed: 'Empty lots with active permits are your best leads. We find them for you.',
-  },
-  {
-    angle: 'blueprint-to-winning-bid',
-    viralHook: 'from-intel-to-win',
-    headline: 'From permit filed to bid won — in 48 hours.',
-    dalleImagePrompt: 'Architectural blueprint plans spread on a job site table, with a contractor\'s hand placing a signed contract on top. Phone next to it showing a permit notification. Sunlight casting shadows across the blueprints. Professional, decisive energy. South Florida jobsite background. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'The contractor\'s hand slides the signed contract firmly onto the blueprints. The phone screen shows the permit that started it all. Camera slowly pulls back to reveal the construction site behind them where work is already beginning. Story of speed-to-win.',
-    captionSeed: 'The contractors who win bids fastest have the best intel.',
-  },
-  {
-    angle: 'lot-to-luxury-mansion',
-    viralHook: 'transformation',
-    headline: 'This lot filed a $5M permit 6 months ago. Who got the work?',
-    dalleImagePrompt: 'Side-by-side comparison image: left half shows an empty sandy Florida lot with a for-sale sign and survey stakes; right half shows a stunning completed 8,000 sqft Mediterranean luxury mansion with pool and lush landscaping — same camera angle, same location. Bold blue dividing line. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'A dramatic dissolve transition from the empty lot on the left to the completed mansion on the right. The transition sweeps across the frame revealing the finished luxury home. Camera gently zooms out after the reveal to show the full scale of the property.',
-    captionSeed: 'That permit was public. The contractor who knew first got everything.',
+    angle: 'waterfront-residential',
+    viralHook: 'luxury-opportunity',
+    headline: 'Waterfront home permits are the highest value bids.',
+    dalleImagePrompt: 'Aerial photograph of Fort Lauderdale residential canal street showing two large luxury waterfront single-family homes under construction side by side. Residential docks, the blue canal, palm trees. No commercial buildings. Purely residential waterfront. Warm afternoon light. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'Camera drifts slowly forward along the canal, revealing each waterfront home under construction. The turquoise water, the palm trees, the custom boat docks being built. High-value residential work that rewards contractors who knew about it early.',
+    captionSeed: 'Waterfront permits go to contractors who move first.',
   },
 
-  // ── CONTRACTOR HUSTLE / IDENTITY ───────────────────────────────────────────
+  // ── CONTRACTOR HUSTLE ─────────────────────────────────────────────────────
   {
-    angle: 'first-on-site-every-morning',
+    angle: 'boots-on-residential-slab',
     viralHook: 'identity-hustle',
-    headline: 'First on site. First to bid. That is the formula.',
-    dalleImagePrompt: 'Cinematic close-up of worn leather work boots stepping onto a fresh concrete foundation slab at sunrise. The boots are mid-stride, confident. Golden morning light rakes across the concrete surface. A construction site waking up in the background. Power and purpose in every detail. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'The boots take a second step forward onto the concrete. Camera follows low along the ground. As they walk, the site comes alive around them — workers arriving, equipment starting up, the South Florida sun rising higher. The first person on site energy is palpable.',
-    captionSeed: 'The best contractors are already on site before their competitors know the job exists.',
+    headline: 'First on site. First to bid.',
+    dalleImagePrompt: 'Cinematic close-up of worn leather work boots stepping onto a fresh concrete residential foundation slab at sunrise. Golden light raking across the smooth concrete. A residential neighborhood with homes visible in the soft background. Palm trees. Power and purpose. No commercial buildings. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The boots take a slow, confident second step onto the concrete slab. Camera follows low along the ground. The residential job site wakes up around them — workers arriving, a concrete mixer nearby. First one here. First one to bid.',
+    captionSeed: 'The best contractors show up before anyone else knows the job exists.',
   },
   {
-    angle: 'contractor-morning-advantage',
+    angle: 'morning-permit-alerts',
     viralHook: 'grind-culture',
-    headline: 'The contractors winning in South Florida wake up to permit alerts.',
-    dalleImagePrompt: 'Contractor sitting in a pickup truck at 5:47 AM in an empty South Florida construction site parking lot. Interior lit by phone screen glow showing a permit alert notification. Steam from a coffee cup. Miami skyline barely visible in the pre-dawn. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'The contractor reads the permit alert, immediately taps the owner contact info, and dials. Through the windshield, the first light of dawn starts to emerge over the Miami skyline. This contractor is working while the competition is still asleep.',
-    captionSeed: '5:47 AM. New permit alert. Active project. Owner contact info. Call made.',
+    headline: 'Winning contractors wake up to permit alerts.',
+    dalleImagePrompt: 'Contractor sitting in a pickup truck at dawn in a South Florida residential neighborhood. Interior glows with phone screen showing a new permit notification. Steam rises from a coffee cup in the holder. Through the windshield: quiet residential street, palm trees, soft pre-dawn sky. No commercial buildings. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The contractor reads the alert, immediately taps the owner contact, and begins dialing. Through the windshield, the neighborhood slowly brightens as dawn arrives over the residential street. A neighbor\'s light turns on. This contractor is already working.',
+    captionSeed: '5:47 AM. New permit. New home. New opportunity. Call already made.',
   },
   {
-    angle: 'handshake-job-already-won',
+    angle: 'residential-handshake-win',
     viralHook: 'win-reveal',
-    headline: 'The job was won before the first nail was driven.',
-    dalleImagePrompt: 'Close-up confident handshake between a contractor in safety vest and hard hat and a project owner in business casual wear. Behind them, an empty construction lot with fresh survey stakes. Contract papers visible under the owner\'s arm. South Florida golden afternoon light. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'The handshake locks in firmly. Behind them in slow motion, the first delivery trucks begin arriving at the empty lot — lumber, equipment. Time is accelerating. The contractor who knew about this permit first is now running the job.',
-    captionSeed: 'Relationships with owners are built before the project starts — or not at all.',
+    headline: 'The job was won before the first nail.',
+    dalleImagePrompt: 'Close-up of a firm handshake between a contractor and a homeowner couple in front of a residential lot with survey stakes in Coral Gables. The homeowner is holding house plans. Lush palm trees, beautiful Florida afternoon light. Residential neighborhood in background. No commercial. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The handshake seals the deal. Behind the contractor, a surveying crew continues working the lot. The homeowner gestures excitedly toward where different rooms will be. Camera slowly pulls back to reveal the full empty lot — this build starts next week.',
+    captionSeed: 'They built this relationship before the permit was even approved.',
   },
   {
-    angle: 'subcontractor-wins-big',
+    angle: 'sub-winning-residential',
     viralHook: 'success-proof',
-    headline: 'Subcontractors who use the right intel stop chasing and start winning.',
-    dalleImagePrompt: 'South Florida subcontractor (electrician/plumber) confidently reviewing a tablet showing active project listings on a job site. Multiple open projects visible on screen. Hard hat, professional gear. Behind them, a large active residential construction site. Proud, busy, in-demand. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'The subcontractor scrolls through active projects — each one a potential job. They tap one, see the project owner contact info, and make the call right on site. In the background, their crew continues working on an existing job. Fully booked, always winning.',
-    captionSeed: 'Stop waiting for the GC to call you. Find the projects yourself.',
+    headline: 'Subcontractors who find projects early stay booked solid.',
+    dalleImagePrompt: 'South Florida subcontractor (electrician or plumber) confidently reviewing a tablet showing a list of active residential construction projects on a job site. Single-family homes under construction in the background. Hard hat, work belt, professional gear. Busy, in-demand, winning. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The subcontractor scrolls through their project pipeline — multiple residential jobs, each one a home being built. They tap one, see the general contractor contact, and make a call. In the background, their crew continues working on an existing home. Fully booked.',
+    captionSeed: 'Stop waiting for the GC to call you. Find the homes yourself.',
   },
 
-  // ── SPEED / URGENCY ─────────────────────────────────────────────────────────
+  // ── SPEED / URGENCY ───────────────────────────────────────────────────────
   {
-    angle: 'permit-timestamp-race',
+    angle: 'permit-timestamps-residential',
     viralHook: 'urgency-clock',
-    headline: 'A permit was filed 4 hours ago. Your competitor already called.',
-    dalleImagePrompt: 'Dramatic close-up of a digital permit filing system screen showing fresh timestamps: 6:02 AM, 6:14 AM, 6:31 AM, 6:47 AM — four separate new permits filed this morning. Each entry shows project address, value, and "OWNER CONTACT AVAILABLE." Phone on a construction site desk. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'New permit entries appear on the screen one by one with a punchy sound-effect visual flair — each timestamp ticking in. The camera pushes slowly into the screen. The most recent permit shows "filed 4 hours ago." The urgency builds with every new line.',
-    captionSeed: '4 hours ago. Your competitor already called. Where were you?',
+    headline: 'A permit filed 4 hours ago. Your competitor already called.',
+    dalleImagePrompt: 'Close-up of a smartphone screen showing a residential permit filing record: "NEW HOME PERMIT — 847 Banyan Rd, Coral Gables — $1.4M Single Family Residence — Filed 4 hours ago — Owner Contact Available." Clean permit data interface. Contractor hand visible holding the phone. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The phone screen scrolls slowly, revealing the permit details — address, value, owner contact, filed timestamp showing 4 hours ago. Camera zooms gently into the owner contact section. This information is the competitive edge. Time is running out.',
+    captionSeed: '4 hours ago. Your competitor already called the homeowner.',
   },
   {
-    angle: 'missed-project-reveal',
+    angle: 'late-to-residential-project',
     viralHook: 'missed-opportunity',
-    headline: 'This project started without your bid in the pile.',
-    dalleImagePrompt: 'Active South Florida construction site with workers and equipment already in full operation. A second contractor arrives at the site entrance holding a bid folder — but concrete is already being poured and framing has started. The job is taken. South Florida morning light. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'The late contractor approaches the active site. Workers pass them without stopping. A concrete truck rolls by. The project is clearly awarded and in progress. The contractor looks at their bid folder, then at the busy site. Camera slowly closes in on their face — this won\'t happen again.',
-    captionSeed: 'Don\'t be the contractor who shows up after the job is gone.',
+    headline: 'This home started without your bid.',
+    dalleImagePrompt: 'Active residential construction site — a beautiful single-family home frame fully erected with workers already installing roof trusses. A contractor arrives at the site entrance holding a bid folder, looking at the fully active job. Residential neighborhood, palm trees, blue sky. The job is clearly already awarded. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The late contractor walks slowly toward the active residential site. Workers pass without stopping. Roof trusses go up. Lumber is being cut. The job is in full swing — awarded, started, moving forward. Camera closes in on the bid folder in the contractor\'s hand, then on the active workers behind.',
+    captionSeed: 'Don\'t be the contractor who shows up after the homeowner already signed.',
   },
   {
-    angle: 'sunday-prep-monday-win',
+    angle: 'sunday-prep-residential',
     viralHook: 'preparation-ritual',
-    headline: 'The bids you win on Monday were found on Sunday.',
-    dalleImagePrompt: 'Contractor at a kitchen table Sunday evening with a laptop showing a construction project intelligence dashboard, coffee cup, legal pad with project notes. Phone next to them. South Florida neighborhood visible through the window at dusk. Focused, preparing, ahead of the game. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'The contractor scrolls through new project listings — tapping stars on the best leads, writing notes. Outside the window, the neighborhood goes dark. This is preparation. By Monday morning they\'ll already have calls scheduled. Camera slowly pushes in toward the laptop screen.',
-    captionSeed: 'Your competitors will scramble Monday. You\'ll already have the calls booked.',
+    headline: 'Monday bids go to whoever prepped Sunday night.',
+    dalleImagePrompt: 'Contractor at a home kitchen table Sunday evening, laptop open showing residential construction project listings — home addresses, permit values, owner contact names. Coffee mug, legal pad with handwritten notes. Through the kitchen window: quiet South Florida neighborhood at dusk, palm trees. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The contractor scrolls through new residential permits, starring the best leads, writing notes. The neighborhood outside goes dark. Inside, they\'re building tomorrow\'s pipeline. Camera slowly pushes in toward the laptop screen showing the home addresses and owner contacts.',
+    captionSeed: 'Your competitors scramble Monday morning. You\'ll already have calls booked.',
+  },
+  {
+    angle: 'winner-loser-residential',
+    viralHook: 'contrast-reveal',
+    headline: 'The gap between first and second call is everything.',
+    dalleImagePrompt: 'Split screen: left side — contractor on phone smiling, shaking hands with a homeowner in front of an empty residential lot with survey stakes; right side — different contractor arriving at the same lot type later, seeing construction has already begun without them. Bold royal blue dividing line. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'Left side: the winning contractor walks the lot with the homeowner, plans in hand, job secured. Right side: the late contractor arrives to find workers already on site, turns and walks away. Camera slowly pulls back to show both halves simultaneously.',
+    captionSeed: 'The difference between these two contractors is 4 hours of information.',
   },
 
-  // ── PLATFORM CAPABILITY / PRODUCT ─────────────────────────────────────────
+  // ── PLATFORM CAPABILITY ───────────────────────────────────────────────────
   {
     angle: 'owner-contact-revealed',
-    viralHook: 'product-reveal',
-    headline: 'We show you who owns the project and how to reach them.',
-    dalleImagePrompt: 'Clean close-up of a smartphone screen showing a BuildersBidBook-style project detail page: project address, $3.1M value, permit number, and below it a "PROJECT OWNER" section with a contact name, phone number, and email. The data is specific and actionable. Phone held by contractor on a job site. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'The phone screen scrolls down slowly revealing the owner contact information — name, phone number, email. A finger taps the phone number. The call connects. Camera slowly zooms in on the screen. This is the intelligence that changes everything.',
-    captionSeed: 'Permit address. Owner name. Phone number. All in one place.',
+    viralHook: 'product-power',
+    headline: 'We show you who owns the home and how to reach them.',
+    dalleImagePrompt: 'Close-up of a smartphone screen showing a BuildersBidBook-style project detail: home address, $1.6M permit value, and below it a section labeled "HOMEOWNER" with a contact name, phone number, and email. Contractor hand holding the phone on a residential street with homes visible. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The screen scrolls slowly downward revealing the homeowner contact section — name appears, then phone number, then email. A thumb taps the phone number. The call connects. Camera gently zooms toward the contact details. This is the intelligence that changes everything.',
+    captionSeed: 'Homeowner name. Phone number. Email. One platform. Updated daily.',
   },
   {
-    angle: 'active-projects-map-live',
-    viralHook: 'platform-power',
-    headline: 'Every active project in your area. Updated daily.',
-    dalleImagePrompt: 'Aerial-style map view of South Florida (Miami Beach to Boca Raton) with dozens of bright royal blue project pins spread across it — each pin representing an active construction permit. The map is clean and modern, the pins clustered in construction-heavy neighborhoods. Satellite imagery base. Photorealistic render. 9:16 vertical.',
-    replicatePrompt: 'New project pins begin appearing on the map one by one — Miami Beach, Coconut Grove, Brickell, Coral Gables, Fort Lauderdale. The pins pulse blue as they appear. Camera slowly zooms into the Miami cluster. Each pin is a real opportunity. The map fills up quickly.',
-    captionSeed: 'This is what the South Florida market looks like right now.',
+    angle: 'residential-map-live',
+    viralHook: 'scale-reveal',
+    headline: 'Every active home construction in your area. Daily.',
+    dalleImagePrompt: 'Street-level neighborhood map of South Florida (Coral Gables, Kendall, Davie, Boca) with dozens of bright royal blue permit pins clustered on residential streets — each pin a home under construction. Clean, modern map interface. No commercial zones. Purely residential streets. Photorealistic render. 9:16 vertical.',
+    replicatePrompt: 'New residential permit pins appear one by one on the neighborhood streets — a house here, another there, then three more on the same block. Camera slowly zooms into a cluster of pins in a busy building neighborhood. Each pin is a homeowner waiting for a call.',
+    captionSeed: 'Every pin is a home. Every home is a homeowner you can reach.',
   },
   {
-    angle: 'early-access-advantage',
-    viralHook: 'exclusive-access',
-    headline: 'Most contractors bid on projects that are already built.',
-    dalleImagePrompt: 'Side-by-side timeline image showing the construction phases: far left — empty lot with permit sign (marked "EARLY ACCESS — BuildersBidBook users"); center — foundation and framing (marked "GOOD — some contractors know"); right — near-complete building (marked "TOO LATE — most contractors"). Bold blue stage markers. Photorealistic illustration style. 9:16 vertical.',
-    replicatePrompt: 'Camera pans slowly from left to right across the three-stage timeline. Each stage label appears as the camera reaches it. When it lands on the "EARLY ACCESS" empty lot stage, the camera stops and slowly zooms in — this is where the opportunity is. This is where BuildersBidBook puts you.',
-    captionSeed: 'We put you at the start of the timeline. Not the end.',
+    angle: 'find-projects-early',
+    viralHook: 'timing-advantage',
+    headline: 'We find homes before construction even starts.',
+    dalleImagePrompt: 'Three-stage split showing the same residential lot: far left — empty lot with permit sign just posted (labeled "Day 1 — Permit Filed"); center — foundation being poured (labeled "Week 3"); right — completed luxury home (labeled "Month 8"). Royal blue stage labels. No commercial anything. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'Camera pans slowly left to right across the three stages. When it reaches "Day 1 — Permit Filed" it stops and gently zooms in — this is where BuildersBidBook puts you. The permit sign becomes clearly readable. This is the beginning. This is where you win.',
+    captionSeed: 'We put you at Day 1. Not Month 8.',
   },
   {
-    angle: 'central-platform-hub',
-    viralHook: 'simplicity-power',
-    headline: 'Stop hunting across 10 websites. One platform has everything.',
-    dalleImagePrompt: 'Clean flat-lay photograph of a contractor\'s work desk: multiple browser tabs printed out and scattered (city permit portals, county sites, Zillow, etc.) all crossed out — and one central tablet in the middle glowing with a clean construction intelligence dashboard. Bold, organized, decisive. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'One by one, the scattered browser printouts are swept off the desk. The central tablet remains, its screen glowing brighter. The contractor\'s hand confidently taps the dashboard — new projects, owner contacts, permit alerts all in one place. Clean. Simple. Powerful.',
-    captionSeed: 'Permits. Projects. Owner contacts. One place. Updated daily.',
+    angle: 'central-platform-simple',
+    viralHook: 'simplicity',
+    headline: 'Permits. Addresses. Owner contacts. One platform.',
+    dalleImagePrompt: 'Clean top-down flat lay of a contractor\'s work desk: scattered county permit portal printouts pushed to the side, and one tablet in the center glowing with a clean residential project dashboard showing home addresses, permit values, and owner contact info. Simple, organized, decisive. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The cluttered permit printouts slide off the desk. The central tablet comes into focus — clean, organized, powerful. A finger scrolls through residential project listings. New homes appearing. Owner contacts visible. Camera slowly zooms toward the tablet screen.',
+    captionSeed: 'Stop hunting across 10 county websites. One platform has everything.',
   },
 
-  // ── CONSTRUCTION CRAFT / ASPIRATIONAL ─────────────────────────────────────
+  // ── CONSTRUCTION CRAFT (RESIDENTIAL) ──────────────────────────────────────
   {
-    angle: 'concrete-pour-golden-hour',
-    viralHook: 'satisfying-cinematic',
+    angle: 'concrete-pour-residential',
+    viralHook: 'satisfying',
     headline: 'Every pour started with a permit. Were you the first call?',
-    dalleImagePrompt: 'Ultra close-up of liquid concrete being poured onto a fresh foundation slab at golden hour in South Florida. The concrete is smooth and fluid, steam rising gently, the surface catching warm orange-gold light. Extreme macro detail — every aggregate visible. Photorealistic ASMR-quality construction photography. 9:16 vertical.',
-    replicatePrompt: 'The concrete flows in slow beautiful motion — smooth, liquid, satisfying. Steam rises in the warm golden light. Camera drifts slowly across the surface of the pour. The rhythmic, meditative quality is hypnotic. Every pour started with a permit. Who made the first call on this one?',
-    captionSeed: 'This started as a permit. The contractor who knew about it first is running this job.',
+    dalleImagePrompt: 'Ultra close-up of smooth liquid concrete being poured onto a residential foundation slab in South Florida at golden hour. Concrete flows in satisfying slow motion, warm light catching the surface. Residential framing and palm trees softly blurred in background. No commercial buildings. ASMR-quality construction photography. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'The concrete flows in beautiful slow motion across the residential foundation. Steam rises gently in the warm golden light. Camera drifts slowly across the smooth wet surface. Deeply satisfying, meditative, and cinematic.',
+    captionSeed: 'This started as a permit. The contractor who knew first is running this job.',
   },
   {
-    angle: 'luxury-home-frame-rising',
-    viralHook: 'build-pride',
-    headline: 'The contractors building South Florida\'s most beautiful homes started early.',
-    dalleImagePrompt: 'Stunning wide-angle photograph of a luxury home wood frame fully erected in Boca Raton — massive two-story frame against a perfect blue Florida sky, palm trees surrounding the property, the scale of the home visible in every beam. Workers visible on the structure. Golden hour light. Photorealistic. 9:16 vertical.',
-    replicatePrompt: 'Camera slowly circles the impressive wood frame structure. The scale becomes increasingly apparent — this is a massive luxury home. Workers move purposefully across the frame. The camera tilts up toward the peak of the roof structure against the blue sky. This is the work that defines South Florida\'s skyline.',
-    captionSeed: 'Projects like this don\'t wait for contractors to find them. Contractors find them first.',
+    angle: 'luxury-home-frame',
+    viralHook: 'craft-pride',
+    headline: 'South Florida\'s best homes start with the right contractor.',
+    dalleImagePrompt: 'Beautiful wide-angle photo of a luxury single-family home wood frame fully erected in Boca Raton. Two-story frame, large footprint, palm trees surrounding it, perfect blue Florida sky. Workers visible on the structure. Custom home scale — large but residential. No commercial anything. Golden hour. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'Camera slowly circles the impressive luxury home wood frame. The scale becomes clear — custom rooms, large windows framed out, second-story balcony structure taking shape. Workers move purposefully. Camera tilts up toward the roofline against the blue Florida sky.',
+    captionSeed: 'Projects like this go to contractors who knew about the permit on Day 1.',
   },
   {
-    angle: 'miami-tower-crane-skyline',
-    viralHook: 'epic-market',
-    headline: 'South Florida construction is exploding. Your pipeline should be too.',
-    dalleImagePrompt: 'Epic dramatic photograph of the Miami skyline at golden hour with five tower cranes visible and silhouetted against the orange sky — buildings under construction at different heights, Ocean in the distance, the scale of the development overwhelming. Photorealistic architectural photography. 9:16 vertical.',
-    replicatePrompt: 'Camera slowly drifts across the Miami skyline, crane by crane. Each crane swings its load against the glowing sky. The city is building at an incredible pace. The scale is inspiring and overwhelming simultaneously. This market is active — the question is how much of it you\'re capturing.',
-    captionSeed: 'All of these started with permits. BuildersBidBook tracks every single one.',
+    angle: 'residential-roof-going-on',
+    viralHook: 'satisfying-build',
+    headline: 'The roof goes on. Did you get the framing bid?',
+    dalleImagePrompt: 'Workers installing a beautiful clay tile roof on a large South Florida luxury residential home. Aerial perspective showing the full roofline, workers in bright safety vests, palm trees and residential neighborhood below. Blue sky. Pure residential — no commercial buildings in sight. Golden afternoon light. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'Camera drifts slowly over the roofline as tiles are set in place one by one. Workers move steadily across the surface. The camera pulls back slightly to reveal the full home below — the neighborhood of similar luxury homes surrounding it. A satisfying reveal of scale.',
+    captionSeed: 'The roof is going on. Three other bids were awarded two months ago.',
+  },
+  {
+    angle: 'empty-lot-opportunity',
+    viralHook: 'early-signal',
+    headline: 'This empty lot has an active permit. Most contractors walk past.',
+    dalleImagePrompt: 'Photorealistic image of an empty sunny lot in Coral Gables with survey stakes and a freshly posted construction permit sign at the edge. Neighboring luxury homes visible on both sides. Palm trees, perfect blue sky. The lot looks unremarkable but the permit sign is prominent and detailed. Early morning light. 9:16 vertical.',
+    replicatePrompt: 'Camera slowly pushes in toward the permit sign on the empty residential lot. Details become clearer — the permit number, the project value, the owner name visible in the lower section. Then the camera pulls back to reveal more vacant lots on the same street with similar permit signs.',
+    captionSeed: 'Empty lots with permits are your best early leads. We find them for you.',
+  },
+  {
+    angle: 'before-after-residential',
+    viralHook: 'transformation',
+    headline: 'This was an empty lot 8 months ago.',
+    dalleImagePrompt: 'Side-by-side comparison: left half shows an empty sandy lot in Coral Gables with survey stakes; right half shows a stunning completed 6,000 sqft Mediterranean luxury home with pool and landscaping — same exact angle. Bold royal blue dividing line. No commercial buildings. Photorealistic. 9:16 vertical.',
+    replicatePrompt: 'A slow sweep reveals the right side of the image — the completed luxury home, the pool, the lush landscaping. The contrast with the empty lot on the left is dramatic. Camera gently zooms in on the finished home. This is what a permit filed 8 months ago looks like today.',
+    captionSeed: 'Every lot was empty once. The permit tells you what\'s coming.',
   },
 
 ] as const;
@@ -261,9 +262,7 @@ export async function generateVideoContent(previousAngles: string[]): Promise<Vi
   const fresh = VIDEO_CONCEPTS.filter(c => !usedSet.has(c.angle));
   const pool: readonly Concept[] = fresh.length >= 3 ? fresh : VIDEO_CONCEPTS;
 
-  // Weighted random — pick from the first 10 to bias toward freshest concepts
   const concept = pool[Math.floor(Math.random() * Math.min(pool.length, 10))];
-
   const caption = await buildCaption(concept);
 
   return {
@@ -278,10 +277,10 @@ export async function generateVideoContent(previousAngles: string[]): Promise<Vi
 // ─────────────────────────────────────────────────────────────────────────────
 
 const HASHTAG_SETS = [
-  '#buildersbidbook #contractors #southflorida #construction #constructionjobs #gccontractor #subcontractor #miamiconstruction #permitready #newconstruction',
-  '#buildersbidbook #constructionintelligence #southfloridaconstruction #generalcontractor #estimator #constructionbusiness #bidmore #winmore #contractorlife',
-  '#buildersbidbook #constructionfl #miamideveloper #fortlauderdaleconstruction #bocaconstruction #newpermits #gclife #subcontractors #buildersbidbook',
-  '#buildersbidbook #miamiconstruction #contractorlife #newpermits #southfloridarealestate #gcconstruction #constructionnetwork #bidfast #contractorgrind',
+  '#buildersbidbook #contractors #southflorida #construction #newconstruction #luxuryhomes #gccontractor #subcontractor #miamiconstruction #residentialconstruction',
+  '#buildersbidbook #constructionintelligence #southfloridaconstruction #generalcontractor #estimator #constructionbusiness #bidmore #winmore #contractorlife #luxuryhomebuilder',
+  '#buildersbidbook #residentialconstruction #miamihomes #fortlauderdalehomes #bocaconstrction #newpermits #gclife #subcontractors #homebuilder #southfloridahomes',
+  '#buildersbidbook #contractorlife #newpermits #southfloridahomes #residentialbuilder #luxuryconstruction #constructionnetwork #bidfast #homebuilding #floridaconstruction',
 ];
 
 async function buildCaption(concept: Concept): Promise<string> {
@@ -298,23 +297,22 @@ async function buildCaption(concept: Concept): Promise<string> {
 ${BBB_BRAND_CONTEXT}
 
 CORE MESSAGE TO ALWAYS REINFORCE:
-"We track active construction addresses in your area. We find projects before they start so you can reach out early, connect with project owners, and build strong relationships. Stay ahead, bid confidently, and grow from one central platform."
+"We track active residential construction addresses in South Florida. We find homes before they start so you can reach homeowners early, connect directly, and build strong relationships. Stay ahead, bid confidently, grow from one central platform."
 
 VIDEO CONCEPT:
 Angle: ${concept.angle}
-Viral hook: ${concept.viralHook}
 Headline: "${concept.headline}"
 Caption seed: "${concept.captionSeed}"
 
 Write a punchy viral Instagram Reel caption. Rules:
-- Line 1 (HOOK): The headline above verbatim or a stronger version. Max 12 words. No emoji.
-- Lines 2-3: 1-2 punchy sentences expanding on the FOMO or value. Reference South Florida, permits, or owner contacts specifically.
-- Line 4: Mention buildersbidbook.com with a clear CTA — "Find active projects at buildersbidbook.com" or similar.
-- Voice: Direct, aggressive, no-fluff Miami contractor energy.
-- BANNED words: "game changer", "unlock", "revolutionize", "in today's world", "don't miss out", "leverage"
+- Line 1 (HOOK): Use the headline or make it stronger. Max 12 words. No emoji.
+- Lines 2-3: 1-2 short punchy sentences — specific South Florida residential context, FOMO or insight.
+- Line 4: Clear CTA mentioning buildersbidbook.com — "Find active homes before your competitors at buildersbidbook.com" or similar.
+- Voice: Direct, no-fluff, Miami contractor energy.
+- BANNED: "game changer", "unlock", "revolutionize", "leverage", "in today's world"
 - Total: 4-5 short lines.
 
-Respond with JSON: { "headline": "the hook line, max 10 words", "caption": "full caption with \\n between lines" }`,
+Respond with JSON: { "headline": "hook line max 10 words", "caption": "full caption with \\n between lines" }`,
         },
       ],
       response_format: { type: 'json_object' },
@@ -329,6 +327,6 @@ Respond with JSON: { "headline": "the hook line, max 10 words", "caption": "full
     const body = parsed.caption?.trim() ?? concept.captionSeed;
     return `${body}\n\n${hashtags}`;
   } catch {
-    return `${concept.headline}\n\n${concept.captionSeed}\n\nFind active construction projects before your competitors at buildersbidbook.com\n\n${hashtags}`;
+    return `${concept.headline}\n\n${concept.captionSeed}\n\nFind active residential construction projects at buildersbidbook.com\n\n${hashtags}`;
   }
 }

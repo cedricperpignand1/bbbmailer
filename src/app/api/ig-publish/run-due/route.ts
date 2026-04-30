@@ -97,36 +97,30 @@ async function runThursdayReel(
   // Generate concept + caption via GPT-4o
   const videoContent = await generateVideoContent(usedAngles);
 
-  // Generate DALL-E first-frame image (the scene as a still)
+  // Generate DALL-E first-frame image (clean — no text overlay)
   const dalleUrl = await generateInstagramImage(videoContent.dalleImagePrompt);
   if (!dalleUrl) {
     return NextResponse.json({ ok: false, error: 'DALL-E first frame generation failed' }, { status: 500 });
   }
 
-  // Stamp headline + BBB logo on the first frame — so the video opens branded
-  const stampedDataUri = await stampAndSaveImage(dalleUrl, videoContent.headline);
-  const stampedBase64  = stampedDataUri.replace(/^data:image\/jpeg;base64,/, '');
-  const stampedStored  = await prisma.igImageStore.create({ data: { data: stampedBase64 } });
-  const baseUrl        = (process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || 'https://bbbmailer.vercel.app').replace(/\/$/, '');
-  const stampedImageUrl = `${baseUrl}/api/ig-publish/img/${stampedStored.id}`;
+  const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || 'https://bbbmailer.vercel.app').replace(/\/$/, '');
 
-  // Also create a 9:16 story image (stamped, for the Story post)
+  // Story: stamped 9:16 image with headline + logo (text stays fully readable here)
   const storyDataUri  = await stampStoryImage(dalleUrl, videoContent.headline);
   const storyBase64   = storyDataUri.replace(/^data:image\/jpeg;base64,/, '');
   const storyStored   = await prisma.igImageStore.create({ data: { data: storyBase64 } });
   const storyImageUrl = `${baseUrl}/api/ig-publish/img/${storyStored.id}`;
 
-  // Pre-warm both image endpoints so Meta doesn't hit cold starts
-  await Promise.all([
-    fetch(stampedImageUrl, { method: 'HEAD' }).catch(() => {}),
-    fetch(storyImageUrl,   { method: 'HEAD' }).catch(() => {}),
-  ]);
+  // Pre-warm the story image endpoint
+  await fetch(storyImageUrl, { method: 'HEAD' }).catch(() => {});
   await new Promise(r => setTimeout(r, 1500));
 
-  // Animate the stamped first frame into a video via Replicate (~2-4 min)
+  // Reel: pass the CLEAN DALL-E image to Replicate.
+  // Stamping text on the first frame causes minimax to blur/distort the text as it animates.
+  // Clean video + branded Story = best of both worlds.
   let videoUrl: string;
   try {
-    videoUrl = await generateReplicateVideo(videoContent.replicatePrompt, stampedImageUrl);
+    videoUrl = await generateReplicateVideo(videoContent.replicatePrompt, dalleUrl);
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: `Replicate video generation failed: ${err instanceof Error ? err.message : String(err)}` },
@@ -183,7 +177,7 @@ async function runThursdayReel(
         configId: 1, dateStr, windowKey,
         headline:  videoContent.headline,
         caption:   videoContent.caption,
-        imageFile: String(stampedStored.id),
+        imageFile: String(storyStored.id),
         videoUrl,
         feedPostId,
         storyPostId,
@@ -192,7 +186,7 @@ async function runThursdayReel(
       update: {
         headline:  videoContent.headline,
         caption:   videoContent.caption,
-        imageFile: String(stampedStored.id),
+        imageFile: String(storyStored.id),
         videoUrl,
         feedPostId,
         storyPostId,
