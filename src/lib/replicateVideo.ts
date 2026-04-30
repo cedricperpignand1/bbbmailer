@@ -1,12 +1,6 @@
 // src/lib/replicateVideo.ts
 // Replicate API client for AI video generation (Thursday Instagram Reels).
-//
-// Set REPLICATE_VIDEO_MODEL in Vercel env to pick a tier:
-//
-//   "wan"     → wavespeedai/wan-2.1-i2v-480p   ~$0.04-0.08/video  ← DEFAULT (cheapest working)
-//   "minimax" → minimax/video-01-live            ~$0.50-1.00/video  (premium quality)
-//
-// Both are image-to-video: they animate the branded first-frame image.
+// Uses minimax/video-01-live — image-to-video, animates the branded first-frame.
 
 const REPLICATE_API = 'https://api.replicate.com/v1';
 
@@ -17,14 +11,6 @@ interface Prediction {
   error?: string;
 }
 
-type VideoModel = 'wan' | 'minimax';
-
-function resolveModel(): VideoModel {
-  const v = (process.env.REPLICATE_VIDEO_MODEL ?? 'wan').toLowerCase();
-  if (v === 'minimax') return 'minimax';
-  return 'wan';
-}
-
 export async function generateReplicateVideo(
   motionPrompt: string,
   firstFrameImageUrl: string
@@ -32,22 +18,25 @@ export async function generateReplicateVideo(
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) throw new Error('REPLICATE_API_TOKEN not set in env');
 
-  const model = resolveModel();
-  const { modelPath, input } = buildRequest(model, motionPrompt, firstFrameImageUrl);
-
-  const res = await fetch(`${REPLICATE_API}/models/${modelPath}/predictions`, {
+  const res = await fetch(`${REPLICATE_API}/models/minimax/video-01-live/predictions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       Prefer: 'wait=60',
     },
-    body: JSON.stringify({ input }),
+    body: JSON.stringify({
+      input: {
+        prompt: motionPrompt,
+        first_frame_image: firstFrameImageUrl,
+        prompt_optimizer: true,
+      },
+    }),
   });
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Replicate (${model}) create prediction failed (${res.status}): ${err}`);
+    throw new Error(`Replicate create prediction failed (${res.status}): ${err}`);
   }
 
   const prediction = await res.json() as Prediction;
@@ -56,44 +45,10 @@ export async function generateReplicateVideo(
   return pollPrediction(prediction.id, token);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-function buildRequest(
-  model: VideoModel,
-  motionPrompt: string,
-  imageUrl: string
-): { modelPath: string; input: Record<string, unknown> } {
-  if (model === 'wan') {
-    return {
-      modelPath: 'wavespeedai/wan-2.1-i2v-480p',
-      input: {
-        image: imageUrl,
-        prompt: motionPrompt,
-        num_frames: 81,
-        sample_steps: 20,
-        frames_per_second: 16,
-        fast_mode: 'Enabled',
-      },
-    };
-  }
-
-  // minimax (premium, confirmed working)
-  return {
-    modelPath: 'minimax/video-01-live',
-    input: {
-      prompt: motionPrompt,
-      first_frame_image: imageUrl,
-      prompt_optimizer: true,
-    },
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
 async function pollPrediction(id: string, token: string, maxWaitMs = 240_000): Promise<string> {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
-    await new Promise(r => setTimeout(r, 5000));
+    await new Promise(r => setTimeout(r, 6000));
     const res = await fetch(`${REPLICATE_API}/predictions/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
