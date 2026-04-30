@@ -1,12 +1,12 @@
 // src/lib/replicateVideo.ts
 // Replicate API client for AI video generation (Thursday Instagram Reels).
 //
-// MODEL TIERS (set REPLICATE_VIDEO_MODEL in env to switch):
-//   "svd"     → stability-ai/stable-video-diffusion  ~$0.01-0.02/video  ← DEFAULT (cheapest)
-//   "wan"     → wan-ai/wan2.1-i2v-480p               ~$0.05-0.10/video  (mid-range, supports motion prompt)
-//   "minimax" → minimax/video-01-live                 ~$0.50-1.00/video  (premium quality)
+// Set REPLICATE_VIDEO_MODEL in Vercel env to pick a tier:
 //
-// All three are image-to-video models — they animate the branded first-frame image.
+//   "wan"     → wavespeedai/wan-2.1-i2v-480p   ~$0.04-0.08/video  ← DEFAULT (cheapest working)
+//   "minimax" → minimax/video-01-live            ~$0.50-1.00/video  (premium quality)
+//
+// Both are image-to-video: they animate the branded first-frame image.
 
 const REPLICATE_API = 'https://api.replicate.com/v1';
 
@@ -17,13 +17,12 @@ interface Prediction {
   error?: string;
 }
 
-type VideoModel = 'svd' | 'wan' | 'minimax';
+type VideoModel = 'wan' | 'minimax';
 
 function resolveModel(): VideoModel {
-  const v = (process.env.REPLICATE_VIDEO_MODEL ?? 'svd').toLowerCase();
+  const v = (process.env.REPLICATE_VIDEO_MODEL ?? 'wan').toLowerCase();
   if (v === 'minimax') return 'minimax';
-  if (v === 'wan') return 'wan';
-  return 'svd';
+  return 'wan';
 }
 
 export async function generateReplicateVideo(
@@ -54,7 +53,7 @@ export async function generateReplicateVideo(
   const prediction = await res.json() as Prediction;
   if (prediction.status === 'succeeded') return extractOutput(prediction);
 
-  return pollPrediction(prediction.id, token, model);
+  return pollPrediction(prediction.id, token);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,34 +63,21 @@ function buildRequest(
   motionPrompt: string,
   imageUrl: string
 ): { modelPath: string; input: Record<string, unknown> } {
-  if (model === 'svd') {
-    return {
-      modelPath: 'stability-ai/stable-video-diffusion',
-      input: {
-        input_image: imageUrl,
-        sizing_strategy: 'maintain_aspect_ratio',
-        frames_per_second: 6,
-        video_length: '25_frames_with_svd_xt',
-        motion_bucket_id: 180,   // 0-255 — higher = more dynamic motion
-        cond_aug: 0.02,
-      },
-    };
-  }
-
   if (model === 'wan') {
     return {
-      modelPath: 'wan-ai/wan2.1-i2v-480p',
+      modelPath: 'wavespeedai/wan-2.1-i2v-480p',
       input: {
         image: imageUrl,
         prompt: motionPrompt,
         num_frames: 81,
-        sample_steps: 30,
+        sample_steps: 20,
+        frames_per_second: 16,
         fast_mode: 'Enabled',
       },
     };
   }
 
-  // minimax (premium)
+  // minimax (premium, confirmed working)
   return {
     modelPath: 'minimax/video-01-live',
     input: {
@@ -104,16 +90,10 @@ function buildRequest(
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function pollPrediction(
-  id: string,
-  token: string,
-  model: VideoModel,
-  maxWaitMs = 240_000
-): Promise<string> {
+async function pollPrediction(id: string, token: string, maxWaitMs = 240_000): Promise<string> {
   const start = Date.now();
-  const interval = model === 'svd' ? 4000 : 6000; // SVD is faster
   while (Date.now() - start < maxWaitMs) {
-    await new Promise(r => setTimeout(r, interval));
+    await new Promise(r => setTimeout(r, 5000));
     const res = await fetch(`${REPLICATE_API}/predictions/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
