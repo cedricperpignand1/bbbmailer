@@ -97,16 +97,36 @@ async function runThursdayReel(
   // Generate concept + caption via GPT-4o
   const videoContent = await generateVideoContent(usedAngles);
 
-  // Generate DALL-E first-frame image (minimax/video-01-live is image-to-video)
-  const firstFrameUrl = await generateInstagramImage(videoContent.dalleImagePrompt);
-  if (!firstFrameUrl) {
+  // Generate DALL-E first-frame image (the scene as a still)
+  const dalleUrl = await generateInstagramImage(videoContent.dalleImagePrompt);
+  if (!dalleUrl) {
     return NextResponse.json({ ok: false, error: 'DALL-E first frame generation failed' }, { status: 500 });
   }
 
-  // Animate the first frame into a video via Replicate (~2-4 min)
+  // Stamp headline + BBB logo on the first frame — so the video opens branded
+  const stampedDataUri = await stampAndSaveImage(dalleUrl, videoContent.headline);
+  const stampedBase64  = stampedDataUri.replace(/^data:image\/jpeg;base64,/, '');
+  const stampedStored  = await prisma.igImageStore.create({ data: { data: stampedBase64 } });
+  const baseUrl        = (process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || 'https://bbbmailer.vercel.app').replace(/\/$/, '');
+  const stampedImageUrl = `${baseUrl}/api/ig-publish/img/${stampedStored.id}`;
+
+  // Also create a 9:16 story image (stamped, for the Story post)
+  const storyDataUri  = await stampStoryImage(dalleUrl, videoContent.headline);
+  const storyBase64   = storyDataUri.replace(/^data:image\/jpeg;base64,/, '');
+  const storyStored   = await prisma.igImageStore.create({ data: { data: storyBase64 } });
+  const storyImageUrl = `${baseUrl}/api/ig-publish/img/${storyStored.id}`;
+
+  // Pre-warm both image endpoints so Meta doesn't hit cold starts
+  await Promise.all([
+    fetch(stampedImageUrl, { method: 'HEAD' }).catch(() => {}),
+    fetch(storyImageUrl,   { method: 'HEAD' }).catch(() => {}),
+  ]);
+  await new Promise(r => setTimeout(r, 1500));
+
+  // Animate the stamped first frame into a video via Replicate (~2-4 min)
   let videoUrl: string;
   try {
-    videoUrl = await generateReplicateVideo(videoContent.replicatePrompt, firstFrameUrl);
+    videoUrl = await generateReplicateVideo(videoContent.replicatePrompt, stampedImageUrl);
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: `Replicate video generation failed: ${err instanceof Error ? err.message : String(err)}` },
@@ -124,8 +144,9 @@ async function runThursdayReel(
     },
   });
 
-  // Publish as Instagram Reel via Meta Graph API
+  // ── Publish Reel (feed) ───────────────────────────────────────────────────
   let feedPostId = '';
+  let storyPostId = '';
   let status: 'success' | 'partial' | 'failed' = 'success';
   let errorMsg: string | undefined;
 
@@ -133,12 +154,26 @@ async function runThursdayReel(
     const reelContainerId = await createReelContainer(
       config.igUserId, config.accessToken, videoUrl, videoContent.caption
     );
-    // Reels take longer to process than images — use more retries
+    // Reels take longer to process — use more retries
     await waitForContainer(config.igUserId, config.accessToken, reelContainerId, 20);
     feedPostId = await publishMedia(config.igUserId, config.accessToken, reelContainerId);
   } catch (err) {
     status   = 'failed';
     errorMsg = err instanceof Error ? err.message : String(err);
+  }
+
+  // ── Publish Story (stamped image with headline) ───────────────────────────
+  if (status !== 'failed') {
+    try {
+      const storyContainerId = await createMediaContainer(
+        config.igUserId, config.accessToken, storyImageUrl, '', true
+      );
+      await waitForContainer(config.igUserId, config.accessToken, storyContainerId);
+      storyPostId = await publishMedia(config.igUserId, config.accessToken, storyContainerId);
+    } catch (err) {
+      status   = 'partial'; // reel worked, story failed
+      errorMsg = err instanceof Error ? err.message : String(err);
+    }
   }
 
   const [logEntry] = await Promise.all([
@@ -148,17 +183,19 @@ async function runThursdayReel(
         configId: 1, dateStr, windowKey,
         headline:  videoContent.headline,
         caption:   videoContent.caption,
-        imageFile: '',
+        imageFile: String(stampedStored.id),
         videoUrl,
         feedPostId,
-        storyPostId: '',
+        storyPostId,
         status, error: errorMsg,
       },
       update: {
         headline:  videoContent.headline,
         caption:   videoContent.caption,
+        imageFile: String(stampedStored.id),
         videoUrl,
         feedPostId,
+        storyPostId,
         status, error: errorMsg,
         publishedAt: new Date(),
       },
@@ -168,7 +205,7 @@ async function runThursdayReel(
       data: {
         lastCronAt: new Date(),
         lastSkipReason: status === 'success'
-          ? `reel posted — ${windowKey} on ${dateStr}`
+          ? `reel+story posted — ${windowKey} on ${dateStr}`
           : `reel ${status}: ${errorMsg?.slice(0, 100) ?? 'unknown error'}`,
       },
     }),
@@ -179,6 +216,7 @@ async function runThursdayReel(
     type: 'reel',
     status,
     feedPostId,
+    storyPostId,
     videoUrl,
     conceptAngle: videoContent.conceptAngle,
     error: errorMsg,
