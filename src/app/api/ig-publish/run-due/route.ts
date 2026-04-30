@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateInstagramContent, generateInstagramImage } from '@/lib/ai/instagramAi';
+import { generateVideoContent } from '@/lib/ai/instagramVideoAi';
 import { stampAndSaveImage, stampStoryImage } from '@/lib/imageStamp';
-import { createMediaContainer, publishMedia, waitForContainer, currentPublishWindow, todayET } from '@/lib/igPublish';
+import { createMediaContainer, createReelContainer, publishMedia, waitForContainer, currentPublishWindow, todayET } from '@/lib/igPublish';
+import { generateReplicateVideo } from '@/lib/replicateVideo';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 180; // image gen + two IG API calls can take ~2 min
+export const maxDuration = 300; // Thursday Reel: Replicate gen (~3 min) + Meta processing (~2 min)
 
 // Vercel cron calls GET — just delegate to the same logic
 export async function GET(req: NextRequest) {
@@ -64,6 +66,127 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── 4. Branch: Thursday = AI video Reel, other days = AI image post ────────
+  const isThursday = windowKey === 'thu-630pm' || (force && new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long' }) === 'Thursday');
+
+  if (isThursday) {
+    return runThursdayReel(req, config, windowKey, dateStr, force);
+  }
+  return runImagePost(config, windowKey, dateStr);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THURSDAY: Generate & post an AI video Reel via Replicate
+// ─────────────────────────────────────────────────────────────────────────────
+async function runThursdayReel(
+  _req: NextRequest,
+  config: { igUserId: string; accessToken: string },
+  windowKey: string,
+  dateStr: string,
+  _force: boolean
+) {
+  // Load last 20 Thursday video angles for anti-repetition
+  const previousVideos = await prisma.igVideoPost.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: { conceptAngle: true },
+  });
+  const usedAngles = previousVideos.map(v => v.conceptAngle);
+
+  // Generate concept + caption via GPT-4o
+  const videoContent = await generateVideoContent(usedAngles);
+
+  // Generate video via Replicate (~2-4 min for minimax/video-01-live)
+  let videoUrl: string;
+  try {
+    videoUrl = await generateReplicateVideo(videoContent.replicatePrompt);
+  } catch (err) {
+    return NextResponse.json(
+      { ok: false, error: `Replicate video generation failed: ${err instanceof Error ? err.message : String(err)}` },
+      { status: 500 }
+    );
+  }
+
+  // Save video post record for anti-repetition tracking
+  await prisma.igVideoPost.create({
+    data: {
+      conceptAngle: videoContent.conceptAngle,
+      headline:     videoContent.headline,
+      videoUrl,
+      caption:      videoContent.caption,
+    },
+  });
+
+  // Publish as Instagram Reel via Meta Graph API
+  let feedPostId = '';
+  let status: 'success' | 'partial' | 'failed' = 'success';
+  let errorMsg: string | undefined;
+
+  try {
+    const reelContainerId = await createReelContainer(
+      config.igUserId, config.accessToken, videoUrl, videoContent.caption
+    );
+    // Reels take longer to process than images — use more retries
+    await waitForContainer(config.igUserId, config.accessToken, reelContainerId, 20);
+    feedPostId = await publishMedia(config.igUserId, config.accessToken, reelContainerId);
+  } catch (err) {
+    status   = 'failed';
+    errorMsg = err instanceof Error ? err.message : String(err);
+  }
+
+  const [logEntry] = await Promise.all([
+    prisma.igPublishLog.upsert({
+      where:  { dateStr_windowKey: { dateStr, windowKey } },
+      create: {
+        configId: 1, dateStr, windowKey,
+        headline:  videoContent.headline,
+        caption:   videoContent.caption,
+        imageFile: '',
+        videoUrl,
+        feedPostId,
+        storyPostId: '',
+        status, error: errorMsg,
+      },
+      update: {
+        headline:  videoContent.headline,
+        caption:   videoContent.caption,
+        videoUrl,
+        feedPostId,
+        status, error: errorMsg,
+        publishedAt: new Date(),
+      },
+    }),
+    prisma.igPublishConfig.update({
+      where: { id: 1 },
+      data: {
+        lastCronAt: new Date(),
+        lastSkipReason: status === 'success'
+          ? `reel posted — ${windowKey} on ${dateStr}`
+          : `reel ${status}: ${errorMsg?.slice(0, 100) ?? 'unknown error'}`,
+      },
+    }),
+  ]);
+
+  return NextResponse.json({
+    ok: status !== 'failed',
+    type: 'reel',
+    status,
+    feedPostId,
+    videoUrl,
+    conceptAngle: videoContent.conceptAngle,
+    error: errorMsg,
+    log: logEntry,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TUE / WED: Generate & post a stamped AI image (existing flow)
+// ─────────────────────────────────────────────────────────────────────────────
+async function runImagePost(
+  config: { igUserId: string; accessToken: string },
+  windowKey: string,
+  dateStr: string
+) {
   // ── 4. Generate AI content ────────────────────────────────────────────────
   const previousPosts = await prisma.igAiPost.findMany({
     orderBy: { createdAt: 'desc' },
@@ -83,22 +206,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Image generation failed' }, { status: 500 });
   }
 
-  // stampAndSaveImage returns "data:image/jpeg;base64,..." — extract base64 only
   const dataUri  = await stampAndSaveImage(dalleUrl, content.headline);
   const base64   = dataUri.replace(/^data:image\/jpeg;base64,/, '');
-
-  // Save to DB so we can serve it via /api/ig-publish/img?id=X
   const stored   = await prisma.igImageStore.create({ data: { data: base64 } });
   const baseUrl  = (process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || 'https://bbbmailer.vercel.app').replace(/\/$/, '');
   const imageUrl = `${baseUrl}/api/ig-publish/img/${stored.id}`;
 
-  // ── 6b. Generate 9:16 story image ────────────────────────────────────────
-  const storyDataUri = await stampStoryImage(dalleUrl, content.headline);
-  const storyBase64  = storyDataUri.replace(/^data:image\/jpeg;base64,/, '');
-  const storyStored  = await prisma.igImageStore.create({ data: { data: storyBase64 } });
+  const storyDataUri  = await stampStoryImage(dalleUrl, content.headline);
+  const storyBase64   = storyDataUri.replace(/^data:image\/jpeg;base64,/, '');
+  const storyStored   = await prisma.igImageStore.create({ data: { data: storyBase64 } });
   const storyImageUrl = `${baseUrl}/api/ig-publish/img/${storyStored.id}`;
 
-  // ── 6. Save AI post record for anti-repetition ────────────────────────────
   await prisma.igAiPost.create({
     data: {
       headline:     content.headline,
@@ -109,13 +227,11 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // ── 6c. Pre-warm image endpoints so Meta doesn't hit a cold serverless start ──
-  // Instagram downloads the image URL immediately — if the function is cold it fails.
+  // Pre-warm image endpoints so Meta doesn't hit a cold serverless start
   await Promise.all([
     fetch(imageUrl,      { method: 'HEAD' }).catch(() => {}),
     fetch(storyImageUrl, { method: 'HEAD' }).catch(() => {}),
   ]);
-  // Small buffer for the warm instance to be ready
   await new Promise(r => setTimeout(r, 1500));
 
   // ── 7. Publish to Instagram (feed post + story) ───────────────────────────
@@ -143,12 +259,11 @@ export async function POST(req: NextRequest) {
       await waitForContainer(config.igUserId, config.accessToken, storyContainerId);
       storyPostId = await publishMedia(config.igUserId, config.accessToken, storyContainerId);
     } catch (err) {
-      status   = 'partial'; // feed worked, story failed
+      status   = 'partial';
       errorMsg = err instanceof Error ? err.message : String(err);
     }
   }
 
-  // ── 8. Log the result ─────────────────────────────────────────────────────
   const [logEntry] = await Promise.all([
     prisma.igPublishLog.upsert({
       where:  { dateStr_windowKey: { dateStr, windowKey } },
@@ -178,5 +293,5 @@ export async function POST(req: NextRequest) {
     }),
   ]);
 
-  return NextResponse.json({ ok: status !== 'failed', status, feedPostId, storyPostId, error: errorMsg, log: logEntry });
+  return NextResponse.json({ ok: status !== 'failed', type: 'image', status, feedPostId, storyPostId, error: errorMsg, log: logEntry });
 }

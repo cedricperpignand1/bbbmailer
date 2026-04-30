@@ -44,6 +44,33 @@ export async function waitForContainer(igUserId: string, accessToken: string, cr
 }
 
 /**
+ * Create a Reel container (video).
+ * video_url must be a publicly reachable MP4 (Replicate output URL works).
+ */
+export async function createReelContainer(
+  igUserId: string,
+  accessToken: string,
+  videoUrl: string,
+  caption: string
+): Promise<string> {
+  const body = new URLSearchParams({
+    video_url: videoUrl,
+    media_type: 'REELS',
+    caption,
+    share_to_feed: 'true',
+    access_token: accessToken,
+  });
+
+  const res = await fetch(`${GRAPH}/${igUserId}/media`, { method: 'POST', body });
+  const data = await res.json() as { id?: string; error?: { message: string; code?: number; error_subcode?: number } };
+  if (!res.ok || !data.id) {
+    const detail = JSON.stringify(data.error ?? data);
+    throw new Error(`IG createReelContainer failed: ${detail}`);
+  }
+  return data.id;
+}
+
+/**
  * Step 2 — publish a container created above.
  * Returns the published media ID.
  */

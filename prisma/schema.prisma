@@ -864,7 +864,8 @@ model IgPublishLog {
   windowKey   String   // "tue-7am" | "wed-12pm" | "thu-630pm"
   headline    String   @default("")
   caption     String   @db.Text
-  imageFile   String   @default("")   // filename under /public/ig-images/
+  imageFile   String   @default("")   // IgImageStore id (image posts)
+  videoUrl    String?                 // Replicate output URL (Thursday Reel posts)
   feedPostId  String   @default("")   // IG media ID returned after publish
   storyPostId String   @default("")
   status      String   // "success" | "partial" | "failed"
@@ -873,6 +874,18 @@ model IgPublishLog {
 
   @@unique([dateStr, windowKey])
   @@index([publishedAt])
+}
+
+// Tracks Thursday video posts for anti-repetition (angle rotation)
+model IgVideoPost {
+  id           Int      @id @default(autoincrement())
+  conceptAngle String   // matches VIDEO_CONCEPTS[].angle in instagramVideoAi.ts
+  headline     String   @default("")
+  videoUrl     String   @default("")
+  caption      String   @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 // ── Craigslist Poster ─────────────────────────────────────────────────────────
