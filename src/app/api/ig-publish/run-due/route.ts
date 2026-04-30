@@ -97,10 +97,16 @@ async function runThursdayReel(
   // Generate concept + caption via GPT-4o
   const videoContent = await generateVideoContent(usedAngles);
 
-  // Generate video via Replicate (~2-4 min for minimax/video-01-live)
+  // Generate DALL-E first-frame image (minimax/video-01-live is image-to-video)
+  const firstFrameUrl = await generateInstagramImage(videoContent.dalleImagePrompt);
+  if (!firstFrameUrl) {
+    return NextResponse.json({ ok: false, error: 'DALL-E first frame generation failed' }, { status: 500 });
+  }
+
+  // Animate the first frame into a video via Replicate (~2-4 min)
   let videoUrl: string;
   try {
-    videoUrl = await generateReplicateVideo(videoContent.replicatePrompt);
+    videoUrl = await generateReplicateVideo(videoContent.replicatePrompt, firstFrameUrl);
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: `Replicate video generation failed: ${err instanceof Error ? err.message : String(err)}` },

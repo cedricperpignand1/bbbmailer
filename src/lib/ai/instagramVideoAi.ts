@@ -214,6 +214,7 @@ type Concept = (typeof VIDEO_CONCEPTS)[number];
 export interface VideoContent {
   conceptAngle: string;
   replicatePrompt: string;
+  dalleImagePrompt: string;  // first-frame image for minimax/video-01-live
   caption: string;
   headline: string;
 }
@@ -235,6 +236,7 @@ export async function generateVideoContent(
   return {
     conceptAngle: concept.angle,
     replicatePrompt: buildReplicatePrompt(concept.scene),
+    dalleImagePrompt: buildDallePrompt(concept.scene),
     caption,
     headline: concept.captionSeed,
   };
@@ -297,4 +299,13 @@ Respond with JSON: { "headline": "hook line only, max 8 words", "caption": "full
 
 function buildReplicatePrompt(scene: string): string {
   return `${scene} No text, no logos, no watermarks, no subtitles. Cinematic professional videography. Smooth motion. High production value. Photorealistic.`;
+}
+
+// Strips animation/motion words so the scene description works as a DALL-E still-image prompt.
+function buildDallePrompt(scene: string): string {
+  const cleaned = scene
+    .replace(/\b(slow[\s-]motion|time[\s-]lapse|fast[\s-]forward|seamless transition|wipe transition|split[\s-]screen|rapid succession|rapid|cut to|fade to|pull back|zoom out|zoom in|camera [a-z]+|montage|timelapse|pan of|sweeping|flying over|pulling back|drone shot)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return `${cleaned} Bright royal blue (#1055FF) brand accent colors, white, clean premium flat design. South Florida. Photorealistic high-quality architectural or construction photography. No text, no logos, no watermarks. Ultra sharp, well-lit, professional.`;
 }

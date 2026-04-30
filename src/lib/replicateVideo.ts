@@ -11,7 +11,7 @@ interface Prediction {
   error?: string;
 }
 
-export async function generateReplicateVideo(prompt: string): Promise<string> {
+export async function generateReplicateVideo(prompt: string, firstFrameImageUrl: string): Promise<string> {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) throw new Error('REPLICATE_API_TOKEN not set in env');
 
@@ -25,6 +25,7 @@ export async function generateReplicateVideo(prompt: string): Promise<string> {
     body: JSON.stringify({
       input: {
         prompt,
+        first_frame_image: firstFrameImageUrl,
         prompt_optimizer: true,
       },
     }),
