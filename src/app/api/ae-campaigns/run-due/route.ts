@@ -6,9 +6,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const BATCH_SIZE = 12; // emails per cron run — safe within 300s limit
+const AE_EMAIL =
+  process.env.AE_GMAIL_SENDER_EMAIL || "angryestimators@gmail.com";
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+const BATCH_SIZE = 12;
 
 function getETParts(now = new Date()) {
   const dtf = new Intl.DateTimeFormat("en-US", {
@@ -30,7 +31,7 @@ function getETParts(now = new Date()) {
     day: Number(get("day")),
     hour: Number(get("hour")),
     minute: Number(get("minute")),
-    weekday: get("weekday"), // "Mon", "Tue", ...
+    weekday: get("weekday"),
   };
 }
 
@@ -60,10 +61,7 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function renderTemplate(
-  template: string,
-  vars: Record<string, string>
-): string {
+function renderTemplate(template: string, vars: Record<string, string>): string {
   let out = template;
   for (const [k, v] of Object.entries(vars)) {
     const re = new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, "g");
@@ -76,17 +74,13 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Randomised human-like delay between sends — kept short to fit within 300s maxDuration */
 function humanDelay(): number {
   const r = Math.random();
-  if (r < 0.05) return 15000 + Math.random() * 15000; // 5 %  → 15–30 s
-  if (r < 0.20) return 8000 + Math.random() * 7000;   // 15 % →  8–15 s
-  return 3000 + Math.random() * 5000;                  // 80 % →  3–8 s
+  if (r < 0.05) return 15000 + Math.random() * 15000;
+  if (r < 0.20) return 8000 + Math.random() * 7000;
+  return 3000 + Math.random() * 5000;
 }
 
-// ── Route handler ─────────────────────────────────────────────────────────────
-
-// Vercel cron sends GET — delegate to the same handler
 export async function GET(req: Request) {
   return POST(req);
 }
@@ -95,7 +89,6 @@ export async function POST(req: Request) {
   const url = new URL(req.url);
   const force = url.searchParams.get("force") === "1";
 
-  // Auth: only block if a key is configured AND a wrong key is explicitly provided
   const key = url.searchParams.get("key") || "";
   const expected = process.env.AUTO_CRON_KEY || "";
   if (expected && key && key !== expected) {
@@ -104,7 +97,6 @@ export async function POST(req: Request) {
 
   const et = getETParts();
 
-  // Weekday check applies to all campaigns
   if (!force && !isWeekday(et.weekday)) {
     return NextResponse.json({
       ok: true,
@@ -115,17 +107,15 @@ export async function POST(req: Request) {
   }
 
   const dateET = etDateString(et);
-  const BBB_EMAIL = process.env.GMAIL_SENDER_EMAIL || "buildersbidbook@gmail.com";
-
   const campaigns = await prisma.autoCampaign.findMany({
-    where: { active: true, gmailAccountEmail: BBB_EMAIL },
+    where: { active: true, gmailAccountEmail: AE_EMAIL },
   });
 
   if (campaigns.length === 0) {
     return NextResponse.json({
       ok: true,
       skipped: true,
-      reason: "No active campaigns",
+      reason: "No active AE campaigns",
       dateET,
     });
   }
@@ -133,7 +123,6 @@ export async function POST(req: Request) {
   const results: object[] = [];
 
   for (const campaign of campaigns) {
-    // Time check: skip if before configured send time
     if (!force) {
       const nowMin = et.hour * 60 + et.minute;
       const targetMin = campaign.sendHourET * 60 + campaign.sendMinuteET;
@@ -147,7 +136,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Check how many have already been sent today
     const existingRun = await prisma.autoCampaignDailyRun.findFirst({
       where: { campaignId: campaign.id, dateET },
     });
@@ -163,7 +151,6 @@ export async function POST(req: Request) {
       continue;
     }
 
-    // Resolve template: DB template takes priority over inline fields
     let tmplSubject = campaign.templateSubject;
     let tmplBody = campaign.templateBody;
     let contentType: "text/plain" | "text/html" = "text/plain";
@@ -189,7 +176,7 @@ export async function POST(req: Request) {
       results.push({
         campaignId: campaign.id,
         skipped: true,
-        reason: "No template configured (set a template or inline subject/body)",
+        reason: "No template configured",
       });
       continue;
     }
@@ -204,7 +191,6 @@ export async function POST(req: Request) {
       continue;
     }
 
-    // Fetch unsent contacts — only up to the remaining daily quota, capped at BATCH_SIZE
     const remaining = campaign.maxPerDay - sentToday;
     const batchLimit = Math.min(BATCH_SIZE, remaining);
 
@@ -225,7 +211,6 @@ export async function POST(req: Request) {
     });
 
     if (contacts.length === 0) {
-      // Record an empty run so the page shows "ran today" instead of "pending"
       await prisma.autoCampaignDailyRun.upsert({
         where: { campaignId_dateET: { campaignId: campaign.id, dateET } },
         create: { campaignId: campaign.id, dateET, sentCount: 0, failedCount: 0 },
@@ -259,7 +244,7 @@ export async function POST(req: Request) {
           subject,
           body,
           contentType,
-          senderEmail: campaign.gmailAccountEmail,
+          senderEmail: AE_EMAIL,
         });
 
         await prisma.autoCampaignSend.create({
@@ -292,7 +277,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Upsert daily run — increment counts so each batch accumulates
     await prisma.autoCampaignDailyRun.upsert({
       where: { campaignId_dateET: { campaignId: campaign.id, dateET } },
       create: { campaignId: campaign.id, dateET, sentCount: sent, failedCount: failed },

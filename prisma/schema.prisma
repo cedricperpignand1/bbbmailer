@@ -119,6 +119,9 @@ model AutoCampaign {
 
   maxPerDay Int @default(45)
 
+  // Which Gmail account sends this campaign
+  gmailAccountEmail String @default("buildersbidbook@gmail.com")
+
   // User-input schedule preferences
   dayOfMonth   Int @default(1) // 1..28 recommended
   sendHourET   Int @default(11) // 0..23
@@ -138,6 +141,7 @@ model AutoCampaign {
   @@index([active])
   @@index([categoryId])
   @@index([templateId])
+  @@index([gmailAccountEmail])
 }
 
 model AutoCampaignRun {

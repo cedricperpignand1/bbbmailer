@@ -4,16 +4,16 @@ import { prisma } from "./prisma";
 const SENDER_EMAIL =
   process.env.GMAIL_SENDER_EMAIL || "buildersbidbook@gmail.com";
 
-function createOAuthClient() {
+function createOAuthClient(redirectUri?: string) {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    redirectUri || process.env.GOOGLE_REDIRECT_URI
   );
 }
 
-export function getGmailAuthUrl(): string {
-  const client = createOAuthClient();
+export function getGmailAuthUrl(redirectUri?: string): string {
+  const client = createOAuthClient(redirectUri);
   return client.generateAuthUrl({
     access_type: "offline",
     scope: [
@@ -24,8 +24,13 @@ export function getGmailAuthUrl(): string {
   });
 }
 
-export async function exchangeCodeAndStore(code: string): Promise<void> {
-  const client = createOAuthClient();
+export async function exchangeCodeAndStore(
+  code: string,
+  senderEmail?: string,
+  redirectUri?: string
+): Promise<void> {
+  const email = senderEmail || SENDER_EMAIL;
+  const client = createOAuthClient(redirectUri);
   const { tokens } = await client.getToken(code);
   if (!tokens.refresh_token) {
     throw new Error(
@@ -34,20 +39,21 @@ export async function exchangeCodeAndStore(code: string): Promise<void> {
     );
   }
   await prisma.gmailAccount.upsert({
-    where: { email: SENDER_EMAIL },
+    where: { email },
     update: { refreshToken: tokens.refresh_token },
-    create: { email: SENDER_EMAIL, refreshToken: tokens.refresh_token },
+    create: { email, refreshToken: tokens.refresh_token },
   });
 }
 
-export async function getGmailStatus(): Promise<{
+export async function getGmailStatus(senderEmail?: string): Promise<{
   connected: boolean;
   email: string;
 }> {
+  const email = senderEmail || SENDER_EMAIL;
   const account = await prisma.gmailAccount.findUnique({
-    where: { email: SENDER_EMAIL },
+    where: { email },
   });
-  return { connected: Boolean(account?.refreshToken), email: SENDER_EMAIL };
+  return { connected: Boolean(account?.refreshToken), email };
 }
 
 export async function sendViaGmail(opts: {
@@ -56,17 +62,21 @@ export async function sendViaGmail(opts: {
   body: string;
   /** Defaults to "text/html" when body looks like HTML, otherwise "text/plain" */
   contentType?: "text/plain" | "text/html";
+  /** Override the sender account — defaults to GMAIL_SENDER_EMAIL env var */
+  senderEmail?: string;
 }): Promise<{
   messageId: string | null | undefined;
   threadId: string | null | undefined;
 }> {
+  const email = opts.senderEmail || SENDER_EMAIL;
+
   const account = await prisma.gmailAccount.findUnique({
-    where: { email: SENDER_EMAIL },
+    where: { email },
   });
 
   if (!account?.refreshToken) {
     throw new Error(
-      `Gmail not connected for ${SENDER_EMAIL}. Visit /api/gmail/connect to authorize.`
+      `Gmail not connected for ${email}. Visit the connect page to authorize.`
     );
   }
 
@@ -81,7 +91,7 @@ export async function sendViaGmail(opts: {
   const encodedSubject = `=?UTF-8?B?${Buffer.from(opts.subject, "utf-8").toString("base64")}?=`;
 
   const messageParts = [
-    `From: ${SENDER_EMAIL}`,
+    `From: ${email}`,
     `To: ${opts.to}`,
     `Subject: ${encodedSubject}`,
     `MIME-Version: 1.0`,
