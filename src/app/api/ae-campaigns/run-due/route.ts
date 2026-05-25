@@ -245,6 +245,8 @@ export async function POST(req: Request) {
           body,
           contentType,
           senderEmail: AE_EMAIL,
+          clientId: process.env.AE_GOOGLE_CLIENT_ID,
+          clientSecret: process.env.AE_GOOGLE_CLIENT_SECRET,
         });
 
         await prisma.autoCampaignSend.create({

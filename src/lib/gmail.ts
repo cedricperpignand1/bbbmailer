@@ -4,16 +4,24 @@ import { prisma } from "./prisma";
 const SENDER_EMAIL =
   process.env.GMAIL_SENDER_EMAIL || "buildersbidbook@gmail.com";
 
-function createOAuthClient(redirectUri?: string) {
+function createOAuthClient(opts?: {
+  clientId?: string;
+  clientSecret?: string;
+  redirectUri?: string;
+}) {
   return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    redirectUri || process.env.GOOGLE_REDIRECT_URI
+    opts?.clientId || process.env.GOOGLE_CLIENT_ID,
+    opts?.clientSecret || process.env.GOOGLE_CLIENT_SECRET,
+    opts?.redirectUri || process.env.GOOGLE_REDIRECT_URI
   );
 }
 
-export function getGmailAuthUrl(redirectUri?: string): string {
-  const client = createOAuthClient(redirectUri);
+export function getGmailAuthUrl(opts?: {
+  clientId?: string;
+  clientSecret?: string;
+  redirectUri?: string;
+}): string {
+  const client = createOAuthClient(opts);
   return client.generateAuthUrl({
     access_type: "offline",
     scope: [
@@ -27,10 +35,10 @@ export function getGmailAuthUrl(redirectUri?: string): string {
 export async function exchangeCodeAndStore(
   code: string,
   senderEmail?: string,
-  redirectUri?: string
+  opts?: { clientId?: string; clientSecret?: string; redirectUri?: string }
 ): Promise<void> {
   const email = senderEmail || SENDER_EMAIL;
-  const client = createOAuthClient(redirectUri);
+  const client = createOAuthClient(opts);
   const { tokens } = await client.getToken(code);
   if (!tokens.refresh_token) {
     throw new Error(
@@ -64,6 +72,9 @@ export async function sendViaGmail(opts: {
   contentType?: "text/plain" | "text/html";
   /** Override the sender account — defaults to GMAIL_SENDER_EMAIL env var */
   senderEmail?: string;
+  /** Override OAuth credentials (for separate Google Cloud projects) */
+  clientId?: string;
+  clientSecret?: string;
 }): Promise<{
   messageId: string | null | undefined;
   threadId: string | null | undefined;
@@ -80,7 +91,10 @@ export async function sendViaGmail(opts: {
     );
   }
 
-  const client = createOAuthClient();
+  const client = createOAuthClient({
+    clientId: opts.clientId,
+    clientSecret: opts.clientSecret,
+  });
   client.setCredentials({ refresh_token: account.refreshToken });
 
   const gmail = google.gmail({ version: "v1", auth: client });

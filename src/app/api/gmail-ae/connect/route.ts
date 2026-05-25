@@ -5,14 +5,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+  const clientId = process.env.AE_GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.AE_GOOGLE_CLIENT_SECRET;
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI_AE;
+
+  if (!clientId || !clientSecret) {
     return NextResponse.json(
-      { error: "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set in .env" },
+      { error: "AE_GOOGLE_CLIENT_ID and AE_GOOGLE_CLIENT_SECRET must be set in .env" },
       { status: 500 }
     );
   }
 
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI_AE;
   if (!redirectUri) {
     return NextResponse.json(
       { error: "GOOGLE_REDIRECT_URI_AE must be set in .env (e.g. https://yourdomain.com/api/gmail-ae/callback)" },
@@ -20,6 +23,6 @@ export async function GET() {
     );
   }
 
-  const url = getGmailAuthUrl(redirectUri);
+  const url = getGmailAuthUrl({ clientId, clientSecret, redirectUri });
   return NextResponse.redirect(url);
 }

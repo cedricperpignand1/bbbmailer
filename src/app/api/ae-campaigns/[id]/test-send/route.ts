@@ -100,6 +100,8 @@ export async function POST(
     body: emailBody,
     contentType,
     senderEmail: AE_EMAIL,
+    clientId: process.env.AE_GOOGLE_CLIENT_ID,
+    clientSecret: process.env.AE_GOOGLE_CLIENT_SECRET,
   });
 
   return NextResponse.json({

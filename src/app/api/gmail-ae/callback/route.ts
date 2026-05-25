@@ -26,16 +26,19 @@ export async function GET(req: Request) {
     );
   }
 
+  const clientId = process.env.AE_GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.AE_GOOGLE_CLIENT_SECRET;
   const redirectUri = process.env.GOOGLE_REDIRECT_URI_AE;
-  if (!redirectUri) {
+
+  if (!clientId || !clientSecret || !redirectUri) {
     return NextResponse.json(
-      { error: "GOOGLE_REDIRECT_URI_AE not set" },
+      { error: "AE_GOOGLE_CLIENT_ID, AE_GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI_AE must be set" },
       { status: 500 }
     );
   }
 
   try {
-    await exchangeCodeAndStore(code, AE_EMAIL, redirectUri);
+    await exchangeCodeAndStore(code, AE_EMAIL, { clientId, clientSecret, redirectUri });
     const appUrl =
       process.env.NEXT_PUBLIC_SITE_URL ||
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
