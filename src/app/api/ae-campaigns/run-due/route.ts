@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendViaGmail } from "@/lib/gmail";
+import { sendViaResend } from "@/lib/resend";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -108,7 +108,7 @@ export async function POST(req: Request) {
 
   const dateET = etDateString(et);
   const campaigns = await prisma.autoCampaign.findMany({
-    where: { active: true, gmailAccountEmail: AE_EMAIL },
+    where: { active: true, gmailAccountEmail: AE_EMAIL }, // gmailAccountEmail still used to scope AE campaigns
   });
 
   if (campaigns.length === 0) {
@@ -239,14 +239,11 @@ export async function POST(req: Request) {
       const body = renderTemplate(tmplBody, vars);
 
       try {
-        const gmailResult = await sendViaGmail({
+        const resendResult = await sendViaResend({
           to: contact.email,
           subject,
           body,
           contentType,
-          senderEmail: AE_EMAIL,
-          clientId: process.env.AE_GOOGLE_CLIENT_ID,
-          clientSecret: process.env.AE_GOOGLE_CLIENT_SECRET,
         });
 
         await prisma.autoCampaignSend.create({
@@ -256,7 +253,7 @@ export async function POST(req: Request) {
             status: "SENT",
             sentAt: new Date(),
             projectUsed: project,
-            gmailMessageId: gmailResult.messageId ?? null,
+            gmailMessageId: resendResult.messageId ?? null,
           },
         });
         sent++;

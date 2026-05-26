@@ -337,7 +337,7 @@ export default function AutoCampaignsPage() {
             Auto Campaigns
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Sends automatically at your chosen time, Mon–Fri via Resend.
+            Sends automatically at your chosen time, Mon–Fri via Gmail.
           </p>
         </div>
 
@@ -722,11 +722,11 @@ export default function AutoCampaignsPage() {
                     Daily run history
                   </h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    Resend sends — one run per campaign per day.
+                    Gmail sends — one run per campaign per day.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Pill tone="blue">Resend</Pill>
+                  <Pill tone="blue">Gmail</Pill>
                 </div>
               </div>
             </div>

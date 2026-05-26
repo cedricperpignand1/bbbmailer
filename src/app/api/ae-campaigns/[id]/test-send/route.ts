@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendViaGmail } from "@/lib/gmail";
+import { sendViaResend } from "@/lib/resend";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -94,15 +94,7 @@ export async function POST(
   const subject = renderTemplate(tmplSubject, vars);
   const emailBody = renderTemplate(tmplBody, vars);
 
-  const result = await sendViaGmail({
-    to,
-    subject,
-    body: emailBody,
-    contentType,
-    senderEmail: AE_EMAIL,
-    clientId: process.env.AE_GOOGLE_CLIENT_ID,
-    clientSecret: process.env.AE_GOOGLE_CLIENT_SECRET,
-  });
+  const result = await sendViaResend({ to, subject, body: emailBody, contentType });
 
   return NextResponse.json({
     ok: true,

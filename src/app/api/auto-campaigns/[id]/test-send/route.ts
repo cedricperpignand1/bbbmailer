@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendViaResend } from "@/lib/resend";
+import { sendViaGmail } from "@/lib/gmail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -93,7 +93,7 @@ export async function POST(
   const subject = renderTemplate(tmplSubject, vars);
   const emailBody = renderTemplate(tmplBody, vars);
 
-  const result = await sendViaResend({ to, subject, body: emailBody, contentType });
+  const result = await sendViaGmail({ to, subject, body: emailBody, contentType });
 
   return NextResponse.json({
     ok: true,

@@ -102,8 +102,6 @@ export default function AeCampaignsPage() {
   const [dailyRuns, setDailyRuns] = useState<DailyRunRow[]>([]);
   const [todayRun, setTodayRun] = useState<DailyRunRow | null>(null);
 
-  const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
-
   const [testEmail, setTestEmail] = useState("");
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -126,8 +124,6 @@ export default function AeCampaignsPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
-  const [bounceDebug, setBounceDebug] = useState<{ id: string; subject: string; snippet: string; extracted: string[] }[] | null>(null);
 
   async function loadAll() {
     setLoading(true);
@@ -135,15 +131,10 @@ export default function AeCampaignsPage() {
     setOkMsg(null);
 
     try {
-      const [dataRes, gmailRes] = await Promise.all([
-        fetch("/api/ae-campaigns", { cache: "no-store" }),
-        fetch("/api/gmail-ae/status", { cache: "no-store" }),
-      ]);
+      const dataRes = await fetch("/api/ae-campaigns", { cache: "no-store" });
 
       const data = await dataRes.json();
-      const gmail = await gmailRes.json().catch(() => ({ connected: false }));
 
-      setGmailConnected(Boolean(gmail?.connected));
       setCategories(data.categories || []);
       setTemplates(data.templates || []);
       setDailyRuns(data.dailyRuns || []);
@@ -185,10 +176,6 @@ export default function AeCampaignsPage() {
   useEffect(() => {
     loadAll();
     const sp = new URLSearchParams(window.location.search);
-    if (sp.get("gmail") === "connected") {
-      setOkMsg("Gmail (AngryEstimators) connected successfully!");
-      window.history.replaceState({}, "", "/ae-campaigns");
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -282,28 +269,6 @@ export default function AeCampaignsPage() {
     }
   }
 
-  async function scanBounces() {
-    setScanning(true);
-    setError(null);
-    setOkMsg(null);
-    setBounceDebug(null);
-    try {
-      const res = await fetch("/api/ae-campaigns/scan-bounces", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data?.error || "Scan failed");
-        return;
-      }
-      await loadAll();
-      setOkMsg(`Bounce scan complete — ${data.bouncesFound} bounce emails found, ${data.contactsMarked} contacts marked as bounced.`);
-      if (data.debugMessages) setBounceDebug(data.debugMessages);
-    } catch {
-      setError("Bounce scan failed — network error");
-    } finally {
-      setScanning(false);
-    }
-  }
-
   async function sendTest() {
     if (!autoCampaign) return setError("Save the campaign first.");
     const emailTrimmed = testEmail.trim();
@@ -360,7 +325,7 @@ export default function AeCampaignsPage() {
             AE Campaigns
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            AngryEstimators — sends automatically Mon–Fri via Gmail.
+            AngryEstimators — sends automatically Mon–Fri via Resend.
           </p>
         </div>
 
@@ -398,37 +363,6 @@ export default function AeCampaignsPage() {
           )}
         </div>
       </div>
-
-      {/* Gmail Status Banner */}
-      {gmailConnected === false && (
-        <div className="mt-4 flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <div className="text-sm text-amber-800">
-            <span className="font-semibold">Gmail not connected.</span> Connect
-            the AngryEstimators Gmail account to enable sending.
-          </div>
-          <a
-            href="/api/gmail-ae/connect"
-            className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
-          >
-            Connect Gmail
-          </a>
-        </div>
-      )}
-
-      {gmailConnected === true && (
-        <div className="mt-4 flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 p-3 px-4">
-          <div className="text-sm text-emerald-800">
-            <span className="font-semibold">Gmail connected</span> —
-            angryestimators@gmail.com
-          </div>
-          <a
-            href="/api/gmail-ae/connect"
-            className="text-xs text-emerald-700 underline hover:text-emerald-900"
-          >
-            Re-connect
-          </a>
-        </div>
-      )}
 
       {/* Today's Status card */}
       {autoCampaign && (
@@ -484,24 +418,6 @@ export default function AeCampaignsPage() {
         <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
           <div className="font-semibold">OK</div>
           <div className="mt-1">{okMsg}</div>
-        </div>
-      )}
-
-      {bounceDebug && (
-        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs">
-          <div className="mb-2 font-semibold text-slate-700">Bounce scan debug — {bounceDebug.length} messages inspected</div>
-          <div className="space-y-2 max-h-72 overflow-y-auto">
-            {bounceDebug.map((m) => (
-              <div key={m.id} className="rounded-lg border border-slate-200 bg-white p-2">
-                <div className="font-medium text-slate-800 truncate">{m.subject}</div>
-                <div className="text-slate-500 truncate">{m.snippet}</div>
-                {m.extracted.length > 0
-                  ? <div className="mt-1 text-emerald-700">Extracted: {m.extracted.join(", ")}</div>
-                  : <div className="mt-1 text-red-500">No address extracted</div>
-                }
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
@@ -709,7 +625,7 @@ export default function AeCampaignsPage() {
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <h2 className="text-lg font-semibold text-slate-900">Test Email</h2>
             <p className="mt-1 text-xs text-slate-500">
-              Sends from angryestimators@gmail.com. Does not affect the contact list or daily limit.
+              Sends via Resend (noreply@angryestimators.com). Does not affect the contact list or daily limit.
             </p>
 
             <div className="mt-3 flex gap-2">
@@ -769,19 +685,11 @@ export default function AeCampaignsPage() {
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Daily run history</h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    Gmail sends via angryestimators@gmail.com — one run per campaign per day.
+                    Resend sends — one run per campaign per day.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={scanBounces}
-                    disabled={scanning}
-                    title="Scan angryestimators@gmail.com inbox for bounce-back emails and mark those contacts as bounced"
-                    className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-60"
-                  >
-                    {scanning ? "Scanning…" : "Scan Bounces"}
-                  </button>
-                  <Pill tone="blue">Gmail</Pill>
+                  <Pill tone="blue">Resend</Pill>
                 </div>
               </div>
             </div>
