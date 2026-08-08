@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendViaGmail } from "@/lib/gmail";
+import { sendViaGmassAccount, getGmassAccounts, getAccountDailyLimit } from "@/lib/gmass";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const BATCH_SIZE = 12; // emails per cron run — safe within 300s limit
+const BATCH_SIZE_PER_ACCOUNT = 12; // emails per account per cron run — safe within 300s limit
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -117,6 +117,8 @@ export async function POST(req: Request) {
   const dateET = etDateString(et);
   const BBB_EMAIL = process.env.GMAIL_SENDER_EMAIL || "buildersbidbook@gmail.com";
 
+  // gmailAccountEmail is a discriminator shared with AE Campaigns' rows in this
+  // same table (see /api/ae-campaigns) — scope to just the main brand's campaigns.
   const campaigns = await prisma.autoCampaign.findMany({
     where: { active: true, gmailAccountEmail: BBB_EMAIL },
   });
@@ -126,6 +128,17 @@ export async function POST(req: Request) {
       ok: true,
       skipped: true,
       reason: "No active campaigns",
+      dateET,
+    });
+  }
+
+  const gmassAccounts = (await getGmassAccounts()).filter((a) => a.active && a.apiKey);
+
+  if (gmassAccounts.length === 0) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: "No GMass accounts configured. Go to /auto-campaigns and connect gmass1/gmass2.",
       dateET,
     });
   }
@@ -145,22 +158,6 @@ export async function POST(req: Request) {
         });
         continue;
       }
-    }
-
-    // Check how many have already been sent today
-    const existingRun = await prisma.autoCampaignDailyRun.findFirst({
-      where: { campaignId: campaign.id, dateET },
-    });
-    const sentToday = existingRun ? existingRun.sentCount : 0;
-
-    if (sentToday >= campaign.maxPerDay) {
-      results.push({
-        campaignId: campaign.id,
-        skipped: true,
-        reason: `Daily limit reached (${sentToday}/${campaign.maxPerDay})`,
-        dateET,
-      });
-      continue;
     }
 
     // Resolve template: DB template takes priority over inline fields
@@ -204,110 +201,163 @@ export async function POST(req: Request) {
       continue;
     }
 
-    // Fetch unsent contacts — only up to the remaining daily quota, capped at BATCH_SIZE
-    const remaining = campaign.maxPerDay - sentToday;
-    const batchLimit = Math.min(BATCH_SIZE, remaining);
+    // ── Per-account sequential sending (round robin across gmass1/gmass2) ──
+    // Each account claims its slice of unsent contacts after the previous
+    // account's sends are committed to the DB, and can send up to
+    // campaign.maxPerDay itself (so 2 accounts ~= 2x the campaign's daily volume).
+    const accountResults: object[] = [];
 
-    const sentRows = await prisma.autoCampaignSend.findMany({
-      where: { campaignId: campaign.id },
-      select: { contactId: true },
-    });
-    const sentIds = sentRows.map((r) => r.contactId);
+    for (const gmassAccount of gmassAccounts) {
+      const { limit: accountLimit, warmupDay } = getAccountDailyLimit(gmassAccount);
+      const dailyLimit = Math.min(accountLimit, campaign.maxPerDay);
 
-    const contacts = await prisma.contact.findMany({
-      where: {
-        categoryId: campaign.categoryId,
-        status: "active",
-        ...(sentIds.length > 0 ? { id: { notIn: sentIds } } : {}),
-      },
-      orderBy: { id: "asc" },
-      take: batchLimit,
-    });
-
-    if (contacts.length === 0) {
-      // Record an empty run so the page shows "ran today" instead of "pending"
-      await prisma.autoCampaignDailyRun.upsert({
-        where: { campaignId_dateET: { campaignId: campaign.id, dateET } },
-        create: { campaignId: campaign.id, dateET, sentCount: 0, failedCount: 0 },
-        update: {},
+      const existingAccountRun = await prisma.autoCampaignAccountDailyRun.findFirst({
+        where: { campaignId: campaign.id, gmassAccountId: gmassAccount.id, dateET },
       });
-      results.push({
-        campaignId: campaign.id,
-        sent: 0,
-        failed: 0,
-        reason: "No unsent contacts remaining",
-        dateET,
-      });
-      continue;
-    }
+      const accountSentToday = existingAccountRun?.sentCount ?? 0;
 
-    let sent = 0;
-    let failed = 0;
-
-    for (let i = 0; i < contacts.length; i++) {
-      const contact = contacts[i];
-      const project = pickRandom(addresses);
-      const firstName = contact.firstName || "there";
-
-      const vars = { firstName, project, address: project };
-      const subject = renderTemplate(tmplSubject, vars);
-      const body = renderTemplate(tmplBody, vars);
-
-      try {
-        const gmailResult = await sendViaGmail({
-          to: contact.email,
-          subject,
-          body,
-          contentType,
-          senderEmail: BBB_EMAIL,
+      if (accountSentToday >= dailyLimit) {
+        accountResults.push({
+          accountKey: gmassAccount.key,
+          skipped: true,
+          reason: `Daily limit reached (${accountSentToday}/${dailyLimit})`,
+          warmupDay,
+          dailyLimit,
         });
-
-        await prisma.autoCampaignSend.create({
-          data: {
-            campaignId: campaign.id,
-            contactId: contact.id,
-            status: "SENT",
-            sentAt: new Date(),
-            projectUsed: project,
-            gmailMessageId: gmailResult.messageId ?? null,
-          },
-        });
-        sent++;
-      } catch (e: any) {
-        const errMsg = String(e?.message || e || "Unknown error").slice(0, 1000);
-        await prisma.autoCampaignSend.create({
-          data: {
-            campaignId: campaign.id,
-            contactId: contact.id,
-            status: "FAILED",
-            projectUsed: project,
-            error: errMsg,
-          },
-        });
-        failed++;
+        continue;
       }
 
-      if (i < contacts.length - 1) {
-        await sleep(humanDelay());
+      const remaining = dailyLimit - accountSentToday;
+      const batchLimit = Math.min(BATCH_SIZE_PER_ACCOUNT, remaining);
+
+      const sentRows = await prisma.autoCampaignSend.findMany({
+        where: { campaignId: campaign.id },
+        select: { contactId: true },
+      });
+      const sentIds = sentRows.map((r) => r.contactId);
+
+      const contacts = await prisma.contact.findMany({
+        where: {
+          categoryId: campaign.categoryId,
+          status: "active",
+          ...(sentIds.length > 0 ? { id: { notIn: sentIds } } : {}),
+        },
+        orderBy: { id: "asc" },
+        take: batchLimit,
+      });
+
+      if (contacts.length === 0) {
+        accountResults.push({
+          accountKey: gmassAccount.key,
+          sent: 0,
+          reason: "No unsent contacts remaining",
+        });
+        continue;
       }
+
+      let sent = 0;
+      let failed = 0;
+
+      for (let i = 0; i < contacts.length; i++) {
+        const contact = contacts[i];
+        const project = pickRandom(addresses);
+        const firstName = contact.firstName || "there";
+
+        const vars = { firstName, project, address: project };
+        const subject = renderTemplate(tmplSubject, vars);
+        const body = renderTemplate(tmplBody, vars);
+
+        try {
+          const sendResult = await sendViaGmassAccount(gmassAccount, {
+            to: contact.email,
+            subject,
+            body,
+            contentType,
+          });
+
+          await prisma.autoCampaignSend.create({
+            data: {
+              campaignId: campaign.id,
+              contactId: contact.id,
+              gmassAccountId: gmassAccount.id,
+              status: "SENT",
+              sentAt: new Date(),
+              projectUsed: project,
+              providerMessageId: sendResult.messageId,
+            },
+          });
+          sent++;
+        } catch (e: any) {
+          const errMsg = String(e?.message || e || "Unknown error").slice(0, 1000);
+          await prisma.autoCampaignSend.create({
+            data: {
+              campaignId: campaign.id,
+              contactId: contact.id,
+              gmassAccountId: gmassAccount.id,
+              status: "FAILED",
+              projectUsed: project,
+              error: errMsg,
+            },
+          });
+          failed++;
+        }
+
+        if (i < contacts.length - 1) {
+          await sleep(humanDelay());
+        }
+      }
+
+      await prisma.autoCampaignAccountDailyRun.upsert({
+        where: {
+          campaignId_gmassAccountId_dateET: {
+            campaignId: campaign.id,
+            gmassAccountId: gmassAccount.id,
+            dateET,
+          },
+        },
+        create: {
+          campaignId: campaign.id,
+          gmassAccountId: gmassAccount.id,
+          dateET,
+          sentCount: sent,
+          failedCount: failed,
+          warmupDay,
+          dailyLimit,
+        },
+        update: {
+          sentCount: { increment: sent },
+          failedCount: { increment: failed },
+        },
+      });
+
+      accountResults.push({
+        accountKey: gmassAccount.key,
+        batchSent: sent,
+        batchFailed: failed,
+        sentToday: accountSentToday + sent,
+        dailyLimit,
+        warmupDay,
+      });
     }
 
-    // Upsert daily run — increment counts so each batch accumulates
+    const totalSent = accountResults.reduce((sum, r: any) => sum + (r.batchSent ?? 0), 0);
+    const totalFailed = accountResults.reduce((sum, r: any) => sum + (r.batchFailed ?? 0), 0);
+
+    // Upsert overall campaign daily run (sum across both accounts this tick)
     await prisma.autoCampaignDailyRun.upsert({
       where: { campaignId_dateET: { campaignId: campaign.id, dateET } },
-      create: { campaignId: campaign.id, dateET, sentCount: sent, failedCount: failed },
+      create: { campaignId: campaign.id, dateET, sentCount: totalSent, failedCount: totalFailed },
       update: {
-        sentCount: { increment: sent },
-        failedCount: { increment: failed },
+        sentCount: { increment: totalSent },
+        failedCount: { increment: totalFailed },
       },
     });
 
     results.push({
       campaignId: campaign.id,
-      batchSent: sent,
-      batchFailed: failed,
-      sentToday: sentToday + sent,
-      dailyLimit: campaign.maxPerDay,
+      accounts: accountResults,
+      totalSent,
+      totalFailed,
       dateET,
     });
   }

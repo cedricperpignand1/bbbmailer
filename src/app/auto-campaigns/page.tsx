@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import GmassAccountsPanel from "@/components/GmassAccountsPanel";
 
 type CategoryRow = {
   id: number;
@@ -105,6 +106,7 @@ export default function AutoCampaignsPage() {
 
   // Test Email
   const [testEmail, setTestEmail] = useState("");
+  const [testAccountKey, setTestAccountKey] = useState<"gmass1" | "gmass2">("gmass1");
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState<{
     ok?: boolean;
@@ -179,11 +181,6 @@ export default function AutoCampaignsPage() {
 
   useEffect(() => {
     loadAll();
-    const sp = new URLSearchParams(window.location.search);
-    if (sp.get("gmail") === "connected") {
-      setOkMsg("Gmail connected successfully!");
-      window.history.replaceState({}, "", "/auto-campaigns");
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -289,7 +286,7 @@ export default function AutoCampaignsPage() {
       const res = await fetch(`/api/auto-campaigns/${autoCampaign.id}/test-send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: emailTrimmed }),
+        body: JSON.stringify({ to: emailTrimmed, accountKey: testAccountKey }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -337,7 +334,7 @@ export default function AutoCampaignsPage() {
             Auto Campaigns
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Sends automatically at your chosen time, Mon–Fri via Gmail.
+            Sends automatically at your chosen time, Mon–Fri via GMass.
           </p>
         </div>
 
@@ -432,6 +429,10 @@ export default function AutoCampaignsPage() {
           <div className="mt-1">{okMsg}</div>
         </div>
       )}
+
+      <div className="mt-5">
+        <GmassAccountsPanel />
+      </div>
 
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-12">
         {/* Settings */}
@@ -663,6 +664,14 @@ export default function AutoCampaignsPage() {
             </p>
 
             <div className="mt-3 flex gap-2">
+              <select
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
+                value={testAccountKey}
+                onChange={(e) => setTestAccountKey(e.target.value as "gmass1" | "gmass2")}
+              >
+                <option value="gmass1">gmass1</option>
+                <option value="gmass2">gmass2</option>
+              </select>
               <input
                 type="email"
                 className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
@@ -722,11 +731,11 @@ export default function AutoCampaignsPage() {
                     Daily run history
                   </h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    Gmail sends — one run per campaign per day.
+                    GMass sends — one run per campaign per day.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Pill tone="blue">Gmail</Pill>
+                  <Pill tone="blue">GMass</Pill>
                 </div>
               </div>
             </div>

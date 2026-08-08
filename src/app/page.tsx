@@ -125,7 +125,7 @@ export default function Home() {
           href="/mass-campaigns"
           badge="Multi-account"
           title="Mass Campaigns"
-          description="Multiple Gmail accounts, shared list, per-account warm-up, no duplicate sends."
+          description="Two GMass accounts, shared list, per-account warm-up, no duplicate sends."
         />
       </div>
 

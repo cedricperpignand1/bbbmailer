@@ -253,7 +253,7 @@ export async function POST(req: Request) {
             status: "SENT",
             sentAt: new Date(),
             projectUsed: project,
-            gmailMessageId: resendResult.messageId ?? null,
+            providerMessageId: resendResult.messageId ?? null,
           },
         });
         sent++;

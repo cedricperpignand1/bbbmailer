@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendViaMassGmail, sendViaMassGmailById } from "@/lib/mass-gmail";
+import { sendViaGmassAccount } from "@/lib/gmass";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,10 +28,15 @@ export async function POST(
   const body = await req.json().catch(() => null);
   const to = String(body?.to || "").trim();
   const firstName = String(body?.firstName || "there").trim();
-  const fromAccountId = body?.fromAccountId ? Number(body.fromAccountId) : null;
+  const accountKey = body?.accountKey === "gmass2" ? "gmass2" : "gmass1";
 
   if (!to || !to.includes("@")) {
     return NextResponse.json({ error: "Valid email required" }, { status: 400 });
+  }
+
+  const gmassAccount = await prisma.gmassAccount.findUnique({ where: { key: accountKey } });
+  if (!gmassAccount?.apiKey) {
+    return NextResponse.json({ error: `${accountKey} is not connected. Add its API key above.` }, { status: 400 });
   }
 
   const campaign = await prisma.massCampaign.findUnique({ where: { id } });
@@ -64,11 +69,9 @@ export async function POST(
   const bodyText = renderTemplate(tmplBody, vars);
 
   try {
-    const result = fromAccountId
-      ? await sendViaMassGmailById(fromAccountId, { to, subject, body: bodyText, contentType })
-      : await sendViaMassGmail({ to, subject, body: bodyText, contentType });
+    const result = await sendViaGmassAccount(gmassAccount, { to, subject, body: bodyText, contentType });
     return NextResponse.json({ ok: true, messageId: result.messageId, subject, projectUsed: project, to });
   } catch (e: any) {
-    return NextResponse.json({ error: String(e?.message || e || "Gmail send failed") }, { status: 500 });
+    return NextResponse.json({ error: String(e?.message || e || "GMass send failed") }, { status: 500 });
   }
 }

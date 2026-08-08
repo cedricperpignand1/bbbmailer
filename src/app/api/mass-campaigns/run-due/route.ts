@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendViaGmailAccountById } from "@/lib/mass-gmail";
-import { scanBouncesForPoolAccounts } from "@/lib/mass-bounce-scan";
+import { sendViaGmassAccount, getGmassAccounts, getAccountDailyLimit } from "@/lib/gmass";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -95,32 +94,6 @@ function isHardBounce(errMsg: string): boolean {
   );
 }
 
-/**
- * Returns the effective daily limit for an account based on its warmup schedule.
- */
-function getAccountDailyLimit(account: {
-  maxPerDay: number;
-  warmupEnabled: boolean;
-  warmupStartDate: Date | null;
-  warmupSchedule: string;
-}): { limit: number; warmupDay: number } {
-  if (!account.warmupEnabled || !account.warmupStartDate) {
-    return { limit: account.maxPerDay, warmupDay: 0 };
-  }
-
-  const schedule = account.warmupSchedule
-    .split(",")
-    .map(Number)
-    .filter((n) => n > 0);
-
-  const msSinceStart = Date.now() - account.warmupStartDate.getTime();
-  const warmupDay = Math.floor(msSinceStart / (1000 * 60 * 60 * 24)) + 1;
-  const limit =
-    warmupDay <= schedule.length ? schedule[warmupDay - 1] : account.maxPerDay;
-
-  return { limit, warmupDay };
-}
-
 // ── Route handlers ────────────────────────────────────────────────────────────
 
 export async function GET(req: Request) {
@@ -154,16 +127,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, skipped: true, reason: "No active campaigns", dateET });
   }
 
-  // Load all Gmail accounts in the mass-send pool
-  const gmailAccounts = await prisma.gmailAccount.findMany({
-    where: { usedForMass: true },
-    orderBy: { id: "asc" },
-  });
+  // Load the GMass account pool (gmass1/gmass2)
+  const gmassAccounts = (await getGmassAccounts()).filter((a) => a.active && a.apiKey);
 
-  if (gmailAccounts.length === 0) {
+  if (gmassAccounts.length === 0) {
     return NextResponse.json({
       ok: true, skipped: true,
-      reason: "No Gmail accounts configured for mass sending. Go to /mass-campaigns and enable accounts.",
+      reason: "No GMass accounts configured. Go to /mass-campaigns and connect gmass1/gmass2.",
       dateET,
     });
   }
@@ -224,21 +194,20 @@ export async function POST(req: Request) {
 
     const accountResults: object[] = [];
 
-    for (const gmailAccount of gmailAccounts) {
-      const { limit: accountLimit, warmupDay } = getAccountDailyLimit(gmailAccount);
+    for (const gmassAccount of gmassAccounts) {
+      const { limit: accountLimit, warmupDay } = getAccountDailyLimit(gmassAccount);
       // Campaign maxPerDay acts as a cap per account — take the lower of the two
       const dailyLimit = Math.min(accountLimit, campaign.maxPerDay);
 
       // How many has this account already sent today for this campaign?
       const existingAccountRun = await prisma.massCampaignAccountDailyRun.findFirst({
-        where: { campaignId: campaign.id, gmailAccountId: gmailAccount.id, dateET },
+        where: { campaignId: campaign.id, gmassAccountId: gmassAccount.id, dateET },
       });
       const accountSentToday = existingAccountRun?.sentCount ?? 0;
 
       if (accountSentToday >= dailyLimit) {
         accountResults.push({
-          accountId: gmailAccount.id,
-          email: gmailAccount.email,
+          accountKey: gmassAccount.key,
           skipped: true,
           reason: `Daily limit reached (${accountSentToday}/${dailyLimit})`,
           warmupDay,
@@ -269,8 +238,7 @@ export async function POST(req: Request) {
 
       if (contacts.length === 0) {
         accountResults.push({
-          accountId: gmailAccount.id,
-          email: gmailAccount.email,
+          accountKey: gmassAccount.key,
           sent: 0,
           reason: "No unsent contacts remaining in current cycle",
         });
@@ -289,7 +257,7 @@ export async function POST(req: Request) {
         const body = renderTemplate(tmplBody, vars);
 
         try {
-          const gmailResult = await sendViaGmailAccountById(gmailAccount.id, {
+          const sendResult = await sendViaGmassAccount(gmassAccount, {
             to: contact.email,
             subject,
             body,
@@ -300,12 +268,12 @@ export async function POST(req: Request) {
             data: {
               campaignId: campaign.id,
               contactId: contact.id,
-              gmailAccountId: gmailAccount.id,
+              gmassAccountId: gmassAccount.id,
               cycleNumber: campaign.cycleNumber,
               status: "SENT",
               sentAt: new Date(),
               projectUsed: project,
-              gmailMessageId: gmailResult.messageId ?? null,
+              providerMessageId: sendResult.messageId,
             },
           });
           sent++;
@@ -319,7 +287,7 @@ export async function POST(req: Request) {
             create: {
               campaignId: campaign.id,
               contactId: contact.id,
-              gmailAccountId: gmailAccount.id,
+              gmassAccountId: gmassAccount.id,
               cycleNumber: campaign.cycleNumber,
               status: "FAILED",
               projectUsed: project,
@@ -327,7 +295,7 @@ export async function POST(req: Request) {
             },
             update: {
               status: "FAILED",
-              gmailAccountId: gmailAccount.id,
+              gmassAccountId: gmassAccount.id,
               error: errMsg,
             },
           });
@@ -349,15 +317,15 @@ export async function POST(req: Request) {
       // Upsert per-account daily run
       await prisma.massCampaignAccountDailyRun.upsert({
         where: {
-          campaignId_gmailAccountId_dateET: {
+          campaignId_gmassAccountId_dateET: {
             campaignId: campaign.id,
-            gmailAccountId: gmailAccount.id,
+            gmassAccountId: gmassAccount.id,
             dateET,
           },
         },
         create: {
           campaignId: campaign.id,
-          gmailAccountId: gmailAccount.id,
+          gmassAccountId: gmassAccount.id,
           dateET,
           sentCount: sent,
           failedCount: failed,
@@ -371,9 +339,8 @@ export async function POST(req: Request) {
       });
 
       accountResults.push({
-        accountId: gmailAccount.id,
-        email: gmailAccount.email,
-        label: gmailAccount.label,
+        accountKey: gmassAccount.key,
+        label: gmassAccount.label,
         batchSent: sent,
         batchFailed: failed,
         sentToday: accountSentToday + sent,
@@ -418,16 +385,10 @@ export async function POST(req: Request) {
         })
       : 0;
 
-    let bounceResult = null;
     let cycleAdvanced = false;
 
     if (totalContactCount > 0 && sentCountThisCycle >= totalContactCount) {
-      // Full list completed — scan bounces first
-      try {
-        bounceResult = await scanBouncesForPoolAccounts();
-      } catch { /* non-fatal */ }
-
-      // Delete completed cycle's send records to keep DB clean
+      // Full list completed — delete this cycle's send records to keep DB clean
       await prisma.massCampaignSend.deleteMany({
         where: { campaignId: campaign.id, cycleNumber: campaign.cycleNumber },
       });
@@ -448,7 +409,6 @@ export async function POST(req: Request) {
       dateET,
       cycleNumber: campaign.cycleNumber,
       cycleAdvanced,
-      bounceResult,
     });
   }
 

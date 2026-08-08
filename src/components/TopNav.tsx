@@ -57,7 +57,7 @@ export default function TopNav() {
       <NavLink href="/categories" label="Contacts" />
       <NavLink href="/templates" label="Templates" />
       <NavLink href="/campaigns" label="Campaigns" />
-      <NavLink href="/mass-campaigns" label="Mass Gmail" highlight />
+      <NavLink href="/mass-campaigns" label="GMass" highlight />
       <NavLink href="/auto-campaigns" label="Auto Campaigns" />
       <NavLink href="/ae-campaigns" label="AE Campaigns" />
       <NavLink href="/mailu-mass" label="Mailu Mass" />

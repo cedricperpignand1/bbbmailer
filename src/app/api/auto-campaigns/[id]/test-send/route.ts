@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendViaGmail } from "@/lib/gmail";
+import { sendViaGmassAccount } from "@/lib/gmass";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,9 +41,18 @@ export async function POST(
   const body = await req.json().catch(() => null);
   const to = String(body?.to || "").trim();
   const firstNameOverride = body?.firstName ? String(body.firstName).trim() : null;
+  const accountKey = body?.accountKey === "gmass2" ? "gmass2" : "gmass1";
 
   if (!EMAIL_RE.test(to)) {
     return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
+  }
+
+  const gmassAccount = await prisma.gmassAccount.findUnique({ where: { key: accountKey } });
+  if (!gmassAccount?.apiKey) {
+    return NextResponse.json(
+      { error: `${accountKey} is not connected. Add its API key above.` },
+      { status: 400 }
+    );
   }
 
   const campaign = await prisma.autoCampaign.findUnique({ where: { id } });
@@ -93,7 +102,7 @@ export async function POST(
   const subject = renderTemplate(tmplSubject, vars);
   const emailBody = renderTemplate(tmplBody, vars);
 
-  const result = await sendViaGmail({ to, subject, body: emailBody, contentType });
+  const result = await sendViaGmassAccount(gmassAccount, { to, subject, body: emailBody, contentType });
 
   return NextResponse.json({
     ok: true,

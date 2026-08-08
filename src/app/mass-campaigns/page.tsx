@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import GmassAccountsPanel from "@/components/GmassAccountsPanel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -14,25 +15,6 @@ type TemplateRow = {
   id: number;
   name: string;
   subject: string;
-};
-
-type GmailAccountRow = {
-  id: number;
-  email: string;
-  label: string;
-  connected: boolean;
-  usedForMass: boolean;
-  maxPerDay: number;
-  warmupEnabled: boolean;
-  warmupStartDate: string | null;
-  warmupSchedule: string;
-  effectiveLimit: number;
-  warmupDay: number;
-  warmupComplete: boolean;
-  todaySent: number;
-  todayFailed: number;
-  lifetimeSent: number;
-  lifetimeFailed: number;
 };
 
 type MassCampaignRow = {
@@ -212,180 +194,7 @@ function clampInt(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.trunc(n)));
 }
 
-function parseWarmupSchedule(csv: string): number[] {
-  return csv.split(",").map((s) => Number(s.trim())).filter((n) => n > 0);
-}
-
 const INLINE_ID = 0;
-
-// ── Warmup Settings Modal ─────────────────────────────────────────────────────
-
-function WarmupModal({
-  account,
-  onClose,
-  onSave,
-}: {
-  account: GmailAccountRow;
-  onClose: () => void;
-  onSave: (patch: object) => Promise<void>;
-}) {
-  const [enabled, setEnabled] = useState(account.warmupEnabled);
-  const [maxPerDay, setMaxPerDay] = useState(String(account.maxPerDay));
-  const [schedule, setSchedule] = useState(account.warmupSchedule);
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
-
-  const scheduleNums = useMemo(() => parseWarmupSchedule(schedule), [schedule]);
-
-  const warmupDays = scheduleNums.length;
-  const currentDay = account.warmupEnabled && account.warmupStartDate
-    ? Math.floor((Date.now() - new Date(account.warmupStartDate).getTime()) / 86400000) + 1
-    : 0;
-
-  async function handleSave() {
-    setSaving(true);
-    setErr("");
-    try {
-      await onSave({
-        warmupEnabled: enabled,
-        warmupSchedule: schedule,
-        maxPerDay: clampInt(Number(maxPerDay), 1, 2000),
-      });
-      onClose();
-    } catch (e: any) {
-      setErr(e.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleReset() {
-    setSaving(true);
-    setErr("");
-    try {
-      await onSave({ resetWarmup: true, warmupSchedule: schedule, maxPerDay: clampInt(Number(maxPerDay), 1, 2000) });
-      onClose();
-    } catch (e: any) {
-      setErr(e.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-slate-900">
-            Warm-up Settings — {account.label || account.email}
-          </h3>
-          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
-            ✕
-          </button>
-        </div>
-
-        <p className="mb-4 text-xs text-slate-500">
-          Gradually ramps up daily sends to protect this account&apos;s domain reputation.
-          Disabled = always use the max/day.
-        </p>
-
-        {err && (
-          <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>
-        )}
-
-        <div className="space-y-4">
-          <label className="flex cursor-pointer items-center gap-3">
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 accent-slate-900"
-            />
-            <span className="text-sm font-medium text-slate-700">Enable warm-up schedule</span>
-          </label>
-
-          <Field
-            label="Max/day (target after warm-up)"
-            help="The daily send limit used after warm-up completes."
-          >
-            <Input
-              type="number"
-              min={1}
-              max={2000}
-              value={maxPerDay}
-              onChange={(e) => setMaxPerDay(e.target.value)}
-            />
-          </Field>
-
-          <Field
-            label="Daily limits — one number per day (one per line or comma-separated)"
-          >
-            <Textarea
-              rows={8}
-              value={schedule.split(",").join("\n")}
-              onChange={(e) =>
-                setSchedule(
-                  e.target.value
-                    .split(/[\n,]+/)
-                    .map((s) => s.trim())
-                    .filter(Boolean)
-                    .join(",")
-                )
-              }
-            />
-            <p className="mt-1 text-xs text-slate-500">
-              {warmupDays} days of warm-up configured. After day {warmupDays}, uses max/day ({clampInt(Number(maxPerDay), 1, 2000)}/day).
-            </p>
-          </Field>
-
-          {/* Warm-up Plan Preview */}
-          <div>
-            <p className="mb-2 text-xs font-semibold text-slate-700">Warm-up Plan Preview</p>
-            <div className="max-h-52 overflow-y-auto rounded-lg border border-slate-200">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50">
-                    <th className="px-3 py-2 text-left font-medium text-slate-600">Day</th>
-                    <th className="px-3 py-2 text-left font-medium text-slate-600">Emails</th>
-                    <th className="px-3 py-2 text-left font-medium text-slate-600">Cumulative</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scheduleNums.map((n, i) => {
-                    const isToday = i + 1 === currentDay;
-                    const cumul = scheduleNums.slice(0, i + 1).reduce((a, b) => a + b, 0);
-                    return (
-                      <tr
-                        key={i}
-                        className={`border-b border-slate-100 ${isToday ? "bg-amber-50" : ""}`}
-                      >
-                        <td className="px-3 py-1.5 font-medium text-slate-800">
-                          {i + 1}{isToday ? " — today" : ""}
-                        </td>
-                        <td className="px-3 py-1.5 text-slate-700">{n}</td>
-                        <td className="px-3 py-1.5 text-slate-500">{cumul}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-5 flex items-center justify-between gap-3">
-          <Btn variant="ghost" onClick={handleReset} loading={saving}>
-            Reset warm-up to today
-          </Btn>
-          <div className="flex gap-2">
-            <Btn variant="secondary" onClick={onClose}>Cancel</Btn>
-            <Btn onClick={handleSave} loading={saving}>Save</Btn>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
@@ -396,12 +205,10 @@ export default function MassCampaignsPage() {
 
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
-  const [gmailAccounts, setGmailAccounts] = useState<GmailAccountRow[]>([]);
   const [campaign, setCampaign] = useState<MassCampaignRow>(null);
   const [dailyRuns, setDailyRuns] = useState<DailyRunRow[]>([]);
   const [stats, setStats] = useState<StatsRow | null>(null);
   const [toast, setToast] = useState("");
-  const [warmupModalAccount, setWarmupModalAccount] = useState<GmailAccountRow | null>(null);
 
   // Campaign form state
   const [name, setName] = useState("Mass Campaign");
@@ -417,26 +224,12 @@ export default function MassCampaignsPage() {
 
   // Test send
   const [testTo, setTestTo] = useState("");
-  const [testFromAccountId, setTestFromAccountId] = useState<number | "">("");
+  const [testAccountKey, setTestAccountKey] = useState<"gmass1" | "gmass2">("gmass1");
   const [testSending, setTestSending] = useState(false);
 
   // Manual run
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<string | null>(null);
-
-  // Scan bounces
-  const [scanning, setScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<string | null>(null);
-
-  // URL param: ?connected=email
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const connected = params.get("connected");
-    if (connected) {
-      showToast(`Connected: ${connected}`);
-      window.history.replaceState({}, "", "/mass-campaigns");
-    }
-  }, []);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -450,7 +243,6 @@ export default function MassCampaignsPage() {
       const data = await res.json();
       setCategories(data.categories ?? []);
       setTemplates(data.templates ?? []);
-      setGmailAccounts(data.gmailAccounts ?? []);
       setDailyRuns(data.dailyRuns ?? []);
       setStats(data.stats ?? null);
 
@@ -545,24 +337,6 @@ export default function MassCampaignsPage() {
     }
   }
 
-  async function scanBounces() {
-    setScanning(true);
-    setScanResult(null);
-    try {
-      const res = await fetch("/api/mass-campaigns/scan-bounces", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Scan failed");
-      const parts = (data.accounts ?? []).map((a: any) =>
-        `${a.email}: ${a.scanned} scanned, ${a.bounced} bounces${a.error ? ` (${a.error})` : ""}`
-      );
-      setScanResult(`Marked ${data.contactsMarked} contact(s) as bounced. ${parts.join(" | ")}`);
-    } catch (e: any) {
-      setScanResult("Error: " + e.message);
-    } finally {
-      setScanning(false);
-    }
-  }
-
   async function resetCampaign() {
     if (!campaign) return;
     if (!confirm("Reset all send history for this campaign? This cannot be undone.")) return;
@@ -583,7 +357,7 @@ export default function MassCampaignsPage() {
       const res = await fetch(`/api/mass-campaigns/${campaign.id}/test-send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: testTo, fromAccountId: testFromAccountId || undefined }),
+        body: JSON.stringify({ to: testTo, accountKey: testAccountKey }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Test failed");
@@ -595,40 +369,11 @@ export default function MassCampaignsPage() {
     }
   }
 
-  async function patchAccount(id: number, patch: object) {
-    const res = await fetch(`/api/gmail/accounts/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error || "Update failed");
-    }
-    await loadData();
-  }
-
-  async function disconnectAccount(id: number, email: string) {
-    if (!confirm(`Disconnect ${email}? This clears the token and removes it from sending.`)) return;
-    await patchAccount(id, { usedForMass: false });
-    await fetch(`/api/gmail/accounts/${id}`, { method: "DELETE" });
-    showToast(`Disconnected ${email}`);
-    await loadData();
-  }
-
   // Template body helper
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.id === templateId),
     [templates, templateId]
   );
-
-  // Accounts in pool vs not
-  const activeAccounts = gmailAccounts.filter((a) => a.usedForMass && a.connected);
-  const inactiveAccounts = gmailAccounts.filter((a) => !a.usedForMass || !a.connected);
-
-  // Total today's sends
-  const totalTodaySent = activeAccounts.reduce((s, a) => s + a.todaySent, 0);
-  const totalEffectiveLimit = activeAccounts.reduce((s, a) => s + a.effectiveLimit, 0);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-16">
@@ -639,23 +384,12 @@ export default function MassCampaignsPage() {
         </div>
       )}
 
-      {/* Warmup modal */}
-      {warmupModalAccount && (
-        <WarmupModal
-          account={warmupModalAccount}
-          onClose={() => setWarmupModalAccount(null)}
-          onSave={async (patch) => {
-            await patchAccount(warmupModalAccount.id, patch);
-          }}
-        />
-      )}
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Mass Campaigns</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Multiple Gmail accounts, shared contact list, no duplicate sends.
+            Two GMass accounts, shared contact list, no duplicate sends.
           </p>
         </div>
         {loading && (
@@ -673,7 +407,7 @@ export default function MassCampaignsPage() {
             { label: "Total contacts", val: stats.totalContacts.toLocaleString() },
             { label: "Remaining", val: stats.remaining.toLocaleString() },
             { label: "Lifetime sent", val: stats.totalSent.toLocaleString() },
-            { label: `Sent today (${activeAccounts.length} accounts)`, val: `${totalTodaySent} / ${totalEffectiveLimit}` },
+            { label: "Sent today", val: stats.todaySent.toLocaleString() },
           ].map((s) => (
             <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="text-xs text-slate-500">{s.label}</div>
@@ -684,65 +418,7 @@ export default function MassCampaignsPage() {
       )}
 
       {/* ── Sending Accounts ──────────────────────────────────────────────── */}
-      <Section title="Sending Accounts">
-        <p className="mb-4 text-xs text-slate-500">
-          Each connected account sends independently. All share the same contact list.
-          Contacts never receive more than one email per campaign (across all accounts).
-        </p>
-
-        {/* Active accounts in pool */}
-        {activeAccounts.length > 0 && (
-          <div className="mb-4 space-y-3">
-            {activeAccounts.map((acc) => (
-              <AccountCard
-                key={acc.id}
-                account={acc}
-                onWarmup={() => setWarmupModalAccount(acc)}
-                onToggle={() => patchAccount(acc.id, { usedForMass: !acc.usedForMass })}
-                onDisconnect={() => disconnectAccount(acc.id, acc.email)}
-                onLabelChange={(label) => patchAccount(acc.id, { label })}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Connected but not in pool */}
-        {inactiveAccounts.filter((a) => a.connected).map((acc) => (
-          <div key={acc.id} className="mb-2 flex items-center justify-between rounded-xl border border-dashed border-slate-200 px-4 py-3">
-            <div>
-              <span className="text-sm font-medium text-slate-700">{acc.label || acc.email}</span>
-              <span className="ml-2 text-xs text-slate-400">{acc.label ? acc.email : ""}</span>
-              <Pill tone="neutral">Not in pool</Pill>
-            </div>
-            <div className="flex gap-2">
-              <Btn variant="secondary" onClick={() => patchAccount(acc.id, { usedForMass: true }).then(() => showToast(`${acc.email} added to pool`)).catch((e) => showToast("Error: " + e.message))}>
-                Add to pool
-              </Btn>
-              <Btn variant="ghost" onClick={() => disconnectAccount(acc.id, acc.email).catch((e) => showToast("Error: " + e.message))}>
-                Remove
-              </Btn>
-            </div>
-          </div>
-        ))}
-
-        {activeAccounts.length === 0 && (
-          <div className="mb-4 rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500">
-            No active sending accounts yet. Connect a Gmail account below.
-          </div>
-        )}
-
-        <div className="flex items-center gap-3">
-          <a
-            href="/api/mass-gmail/connect"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
-          >
-            + Connect Gmail Account
-          </a>
-          <span className="text-xs text-slate-400">
-            You&apos;ll be redirected to Google to authorize. Email is auto-detected.
-          </span>
-        </div>
-      </Section>
+      <GmassAccountsPanel />
 
       {/* ── Campaign Settings ─────────────────────────────────────────────── */}
       <Section title="Campaign Settings">
@@ -852,9 +528,6 @@ export default function MassCampaignsPage() {
               <Btn variant="primary" onClick={runNow} loading={running}>
                 {running ? "Sending…" : "Run now"}
               </Btn>
-              <Btn variant="secondary" onClick={scanBounces} loading={scanning}>
-                {scanning ? "Scanning…" : "Scan bounces"}
-              </Btn>
               <Btn variant="danger" onClick={resetCampaign} loading={resetting}>
                 Reset history
               </Btn>
@@ -872,11 +545,6 @@ export default function MassCampaignsPage() {
               {runResult}
             </div>
           )}
-          {scanResult && (
-            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
-              {scanResult}
-            </div>
-          )}
         </div>
       </Section>
 
@@ -888,14 +556,12 @@ export default function MassCampaignsPage() {
           </p>
           <div className="flex flex-wrap gap-3">
             <select
-              value={testFromAccountId}
-              onChange={(e) => setTestFromAccountId(e.target.value ? Number(e.target.value) : "")}
+              value={testAccountKey}
+              onChange={(e) => setTestAccountKey(e.target.value as "gmass1" | "gmass2")}
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
             >
-              <option value="">— pick sending account —</option>
-              {gmailAccounts.filter((a) => a.connected).map((a) => (
-                <option key={a.id} value={a.id}>{a.label || a.email}</option>
-              ))}
+              <option value="gmass1">gmass1</option>
+              <option value="gmass2">gmass2</option>
             </select>
             <Input
               type="email"
@@ -904,7 +570,7 @@ export default function MassCampaignsPage() {
               onChange={(e) => setTestTo(e.target.value)}
               className="max-w-xs"
             />
-            <Btn onClick={sendTestEmail} loading={testSending} disabled={!testTo || !testFromAccountId}>
+            <Btn onClick={sendTestEmail} loading={testSending} disabled={!testTo}>
               Send test
             </Btn>
           </div>
@@ -946,132 +612,6 @@ export default function MassCampaignsPage() {
           </div>
         </Section>
       )}
-    </div>
-  );
-}
-
-// ── Account Card ──────────────────────────────────────────────────────────────
-
-function AccountCard({
-  account,
-  onWarmup,
-  onToggle,
-  onDisconnect,
-  onLabelChange,
-}: {
-  account: GmailAccountRow;
-  onWarmup: () => void;
-  onToggle: () => void;
-  onDisconnect: () => void;
-  onLabelChange: (label: string) => void;
-}) {
-  const [editingLabel, setEditingLabel] = useState(false);
-  const [labelDraft, setLabelDraft] = useState(account.label);
-
-  const scheduleLen = account.warmupSchedule.split(",").filter(Boolean).length;
-  const warmupProgress = account.warmupEnabled
-    ? Math.min(account.warmupDay / scheduleLen, 1)
-    : 1;
-  const warmupPct = Math.round(warmupProgress * 100);
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        {/* Left: email + label */}
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-            {editingLabel ? (
-              <input
-                autoFocus
-                className="rounded border border-slate-300 px-2 py-0.5 text-sm font-medium text-slate-900 focus:outline-none"
-                value={labelDraft}
-                onChange={(e) => setLabelDraft(e.target.value)}
-                onBlur={() => {
-                  setEditingLabel(false);
-                  if (labelDraft !== account.label) onLabelChange(labelDraft);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    setEditingLabel(false);
-                    if (labelDraft !== account.label) onLabelChange(labelDraft);
-                  }
-                  if (e.key === "Escape") {
-                    setLabelDraft(account.label);
-                    setEditingLabel(false);
-                  }
-                }}
-              />
-            ) : (
-              <button
-                className="text-sm font-semibold text-slate-900 hover:underline"
-                onClick={() => setEditingLabel(true)}
-                title="Click to edit label"
-              >
-                {account.label || account.email}
-              </button>
-            )}
-            {account.label && (
-              <span className="truncate text-xs text-slate-400">{account.email}</span>
-            )}
-          </div>
-
-          {/* Warm-up status */}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {account.warmupEnabled ? (
-              account.warmupComplete ? (
-                <Pill tone="green">Warm-up complete</Pill>
-              ) : (
-                <Pill tone="amber">Warm-up day {account.warmupDay} / {scheduleLen}</Pill>
-              )
-            ) : (
-              <Pill tone="neutral">No warm-up</Pill>
-            )}
-            <span className="text-xs text-slate-500">
-              Effective today: <strong>{account.effectiveLimit}</strong>/day
-            </span>
-          </div>
-
-          {/* Today's progress bar */}
-          <div className="mt-2">
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span>Today: {account.todaySent} / {account.effectiveLimit}</span>
-              {account.warmupEnabled && !account.warmupComplete && (
-                <span className="text-xs text-amber-600">
-                  Warm-up {warmupPct}%
-                </span>
-              )}
-            </div>
-            <div className="mt-1 h-1.5 rounded-full bg-slate-200">
-              <div
-                className="h-1.5 rounded-full bg-emerald-500 transition-all"
-                style={{
-                  width: `${Math.min(
-                    100,
-                    account.effectiveLimit > 0
-                      ? Math.round((account.todaySent / account.effectiveLimit) * 100)
-                      : 0
-                  )}%`,
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="mt-1 text-xs text-slate-400">
-            Lifetime: {(account.lifetimeSent ?? 0).toLocaleString()} sent
-          </div>
-        </div>
-
-        {/* Right: actions */}
-        <div className="flex flex-wrap gap-2">
-          <Btn variant="secondary" onClick={onWarmup}>
-            Warm-up settings
-          </Btn>
-          <Btn variant="ghost" onClick={onDisconnect}>
-            Disconnect
-          </Btn>
-        </div>
-      </div>
     </div>
   );
 }
