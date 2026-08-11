@@ -22,3 +22,23 @@ export function verifyUnsubToken(token: string): number | null {
   const ok = crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
   return ok ? id : null;
 }
+
+/** Unsubscribe footer to append to an outgoing email body — click marks the contact unsubscribed. */
+export function unsubscribeFooter(contactId: number, contentType: "text/plain" | "text/html"): string {
+  const appUrl = process.env.APP_URL || "http://localhost:3000";
+  const token = makeUnsubToken(contactId);
+  const unsubUrl = `${appUrl}/api/unsubscribe?token=${encodeURIComponent(token)}`;
+
+  if (contentType === "text/html") {
+    return `
+<hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#777;line-height:1.4;">
+  <div>You're receiving this because you're on our contractor list.</div>
+  <div style="margin-top:8px;">
+    <a href="${unsubUrl}" style="color:#777;text-decoration:underline;">Unsubscribe</a>
+  </div>
+</div>`;
+  }
+
+  return `\n\n---\nDon't want these emails? Unsubscribe: ${unsubUrl}`;
+}

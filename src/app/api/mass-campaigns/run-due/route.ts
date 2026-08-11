@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendViaGmassAccount, getGmassAccounts, getAccountDailyLimit } from "@/lib/gmass";
+import { unsubscribeFooter } from "@/lib/unsub";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,9 +9,9 @@ export const maxDuration = 300;
 
 /**
  * Batch size per account per cron tick.
- * With ~3–8s pacing and 3 accounts × 12 = 36 emails, fits well within 300s.
+ * 35 x 2 accounts (gmass1/gmass2) = 70 emails/tick, fits within 300s with the tightened pacing below.
  */
-const BATCH_SIZE_PER_ACCOUNT = 12;
+const BATCH_SIZE_PER_ACCOUNT = 35;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -70,11 +71,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Tightened so 35/account still fits within 300s maxDuration */
 function humanDelay(): number {
   const r = Math.random();
-  if (r < 0.05) return 15000 + Math.random() * 15000; // 5%  → 15–30s
-  if (r < 0.20) return 8000 + Math.random() * 7000;   // 15% → 8–15s
-  return 3000 + Math.random() * 5000;                  // 80% → 3–8s
+  if (r < 0.02) return 6000 + Math.random() * 6000;  // 2%  → 6–12s
+  if (r < 0.10) return 3000 + Math.random() * 3000;  // 8%  → 3–6s
+  return 1000 + Math.random() * 2000;                 // 90% → 1–3s
 }
 
 function isHardBounce(errMsg: string): boolean {
@@ -254,9 +256,9 @@ export async function POST(req: Request) {
         const firstName = contact.firstName || "there";
         const vars = { firstName, project, address: project };
         const subject = renderTemplate(tmplSubject, vars);
-        const body = renderTemplate(tmplBody, vars);
 
         try {
+          const body = renderTemplate(tmplBody, vars) + unsubscribeFooter(contact.id, contentType);
           const sendResult = await sendViaGmassAccount(gmassAccount, {
             to: contact.email,
             subject,

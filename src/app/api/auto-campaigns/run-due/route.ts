@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendViaGmassAccount, getGmassAccounts, getAccountDailyLimit } from "@/lib/gmass";
+import { unsubscribeFooter } from "@/lib/unsub";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const BATCH_SIZE_PER_ACCOUNT = 12; // emails per account per cron run — safe within 300s limit
+const BATCH_SIZE_PER_ACCOUNT = 35; // emails per account per cron run — 35 x 2 accounts = 70/tick, safe within 300s limit
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -76,12 +77,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Randomised human-like delay between sends — kept short to fit within 300s maxDuration */
+/** Randomised human-like delay between sends — tightened so 35/account still fits within 300s maxDuration */
 function humanDelay(): number {
   const r = Math.random();
-  if (r < 0.05) return 15000 + Math.random() * 15000; // 5 %  → 15–30 s
-  if (r < 0.20) return 8000 + Math.random() * 7000;   // 15 % →  8–15 s
-  return 3000 + Math.random() * 5000;                  // 80 % →  3–8 s
+  if (r < 0.02) return 6000 + Math.random() * 6000;  // 2 %  →  6–12 s
+  if (r < 0.10) return 3000 + Math.random() * 3000;  // 8 %  →  3–6 s
+  return 1000 + Math.random() * 2000;                 // 90 % →  1–3 s
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -265,9 +266,9 @@ export async function POST(req: Request) {
 
         const vars = { firstName, project, address: project };
         const subject = renderTemplate(tmplSubject, vars);
-        const body = renderTemplate(tmplBody, vars);
 
         try {
+          const body = renderTemplate(tmplBody, vars) + unsubscribeFooter(contact.id, contentType);
           const sendResult = await sendViaGmassAccount(gmassAccount, {
             to: contact.email,
             subject,
