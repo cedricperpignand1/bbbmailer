@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendViaGmassAccount } from "@/lib/gmass";
+import { unsubscribeFooter } from "@/lib/unsub";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,7 +67,11 @@ export async function POST(
   const project = pickRandom(addresses);
   const vars = { firstName, project, address: project };
   const subject = renderTemplate(tmplSubject, vars);
-  const bodyText = renderTemplate(tmplBody, vars);
+
+  // Use the real contact's id if this test address matches one (so the unsubscribe link
+  // actually works), otherwise fall back to a placeholder just so the preview looks right.
+  const matchedContact = await prisma.contact.findFirst({ where: { email: to } });
+  const bodyText = renderTemplate(tmplBody, vars) + unsubscribeFooter(matchedContact?.id ?? 0, contentType);
 
   try {
     const result = await sendViaGmassAccount(gmassAccount, { to, subject, body: bodyText, contentType });
