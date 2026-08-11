@@ -32,10 +32,10 @@ export function unsubscribeFooter(contactId: number, contentType: "text/plain" |
   if (contentType === "text/html") {
     return `
 <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
-<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#777;line-height:1.4;">
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#777;line-height:1.4;">
   <div>You're receiving this because you're on our contractor list.</div>
   <div style="margin-top:8px;">
-    <a href="${unsubUrl}" style="color:#777;text-decoration:underline;">Unsubscribe</a>
+    <a href="${unsubUrl}" style="color:#555;text-decoration:underline;font-size:16px;font-weight:bold;">Unsubscribe</a>
   </div>
 </div>`;
   }
