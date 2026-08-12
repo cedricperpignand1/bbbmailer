@@ -143,20 +143,6 @@ export async function POST(req: Request) {
   const campaignResults: object[] = [];
 
   for (const campaign of campaigns) {
-    // ── Time check ────────────────────────────────────────────────────────
-    if (!force) {
-      const nowMin = et.hour * 60 + et.minute;
-      const targetMin = campaign.sendHourET * 60 + campaign.sendMinuteET;
-      if (nowMin < targetMin) {
-        campaignResults.push({
-          campaignId: campaign.id,
-          skipped: true,
-          reason: `Too early — scheduled for ${String(campaign.sendHourET).padStart(2, "0")}:${String(campaign.sendMinuteET).padStart(2, "0")} ET`,
-        });
-        continue;
-      }
-    }
-
     if (!campaign.categoryId) {
       campaignResults.push({ campaignId: campaign.id, skipped: true, reason: "No contact list configured" });
       continue;
@@ -197,6 +183,27 @@ export async function POST(req: Request) {
     const accountResults: object[] = [];
 
     for (const gmassAccount of gmassAccounts) {
+      // Per-account time check — each account can have its own send time,
+      // falling back to the campaign's shared sendHourET/sendMinuteET.
+      if (!force) {
+        const targetHour =
+          (gmassAccount.key === "gmass2" ? campaign.gmass2SendHourET : campaign.gmass1SendHourET) ??
+          campaign.sendHourET;
+        const targetMinute =
+          (gmassAccount.key === "gmass2" ? campaign.gmass2SendMinuteET : campaign.gmass1SendMinuteET) ??
+          campaign.sendMinuteET;
+        const nowMin = et.hour * 60 + et.minute;
+        const targetMin = targetHour * 60 + targetMinute;
+        if (nowMin < targetMin) {
+          accountResults.push({
+            accountKey: gmassAccount.key,
+            skipped: true,
+            reason: `Too early — scheduled for ${String(targetHour).padStart(2, "0")}:${String(targetMinute).padStart(2, "0")} ET`,
+          });
+          continue;
+        }
+      }
+
       const { limit: accountLimit, warmupDay } = getAccountDailyLimit(gmassAccount);
       // Campaign maxPerDay acts as a cap per account — take the lower of the two
       const dailyLimit = Math.min(accountLimit, campaign.maxPerDay);

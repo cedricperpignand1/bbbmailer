@@ -29,6 +29,10 @@ type MassCampaignRow = {
   maxPerDay: number;
   sendHourET: number;
   sendMinuteET: number;
+  gmass1SendHourET: number | null;
+  gmass1SendMinuteET: number | null;
+  gmass2SendHourET: number | null;
+  gmass2SendMinuteET: number | null;
   createdAt: string;
   updatedAt: string;
 } | null;
@@ -219,8 +223,10 @@ export default function MassCampaignsPage() {
   const [templateBody, setTemplateBody] = useState("");
   const [addressesText, setAddressesText] = useState("");
   const [maxPerDay, setMaxPerDay] = useState(275);
-  const [sendHourET, setSendHourET] = useState(11);
-  const [sendMinuteET, setSendMinuteET] = useState(0);
+  const [gmass1Hour, setGmass1Hour] = useState(11);
+  const [gmass1Minute, setGmass1Minute] = useState(0);
+  const [gmass2Hour, setGmass2Hour] = useState(11);
+  const [gmass2Minute, setGmass2Minute] = useState(0);
 
   // Test send
   const [testTo, setTestTo] = useState("");
@@ -257,8 +263,10 @@ export default function MassCampaignsPage() {
         setTemplateBody(c.templateBody ?? "");
         setAddressesText(c.addressesText ?? "");
         setMaxPerDay(c.maxPerDay ?? 275);
-        setSendHourET(c.sendHourET ?? 11);
-        setSendMinuteET(c.sendMinuteET ?? 0);
+        setGmass1Hour(c.gmass1SendHourET ?? c.sendHourET ?? 11);
+        setGmass1Minute(c.gmass1SendMinuteET ?? c.sendMinuteET ?? 0);
+        setGmass2Hour(c.gmass2SendHourET ?? c.sendHourET ?? 11);
+        setGmass2Minute(c.gmass2SendMinuteET ?? c.sendMinuteET ?? 0);
       }
     } finally {
       setLoading(false);
@@ -279,8 +287,12 @@ export default function MassCampaignsPage() {
         templateBody,
         addressesText: normalizeAddresses(addressesText),
         maxPerDay: clampInt(maxPerDay, 1, 2000),
-        sendHourET: clampInt(sendHourET, 0, 23),
-        sendMinuteET: clampInt(sendMinuteET, 0, 59),
+        sendHourET: clampInt(gmass1Hour, 0, 23),
+        sendMinuteET: clampInt(gmass1Minute, 0, 59),
+        gmass1SendHourET: clampInt(gmass1Hour, 0, 23),
+        gmass1SendMinuteET: clampInt(gmass1Minute, 0, 59),
+        gmass2SendHourET: clampInt(gmass2Hour, 0, 23),
+        gmass2SendMinuteET: clampInt(gmass2Minute, 0, 59),
       };
       const res = await fetch("/api/mass-campaigns/upsert", {
         method: "POST",
@@ -442,34 +454,66 @@ export default function MassCampaignsPage() {
             </Field>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Default max/day per account" help="Each account sends up to this many emails per day (overridden by warmup).">
-              <Input
-                type="number"
-                min={1}
-                max={2000}
-                value={maxPerDay}
-                onChange={(e) => setMaxPerDay(clampInt(Number(e.target.value), 1, 2000))}
-              />
-            </Field>
-            <Field label="Send hour (ET)">
-              <Input
-                type="number"
-                min={0}
-                max={23}
-                value={sendHourET}
-                onChange={(e) => setSendHourET(clampInt(Number(e.target.value), 0, 23))}
-              />
-            </Field>
-            <Field label="Send minute (ET)">
-              <Input
-                type="number"
-                min={0}
-                max={59}
-                value={sendMinuteET}
-                onChange={(e) => setSendMinuteET(clampInt(Number(e.target.value), 0, 59))}
-              />
-            </Field>
+          <Field label="Default max/day per account" help="Each account sends up to this many emails per day (overridden by warmup).">
+            <Input
+              type="number"
+              min={1}
+              max={2000}
+              value={maxPerDay}
+              onChange={(e) => setMaxPerDay(clampInt(Number(e.target.value), 1, 2000))}
+              className="max-w-xs"
+            />
+          </Field>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Send times (ET)</label>
+            <p className="mb-2 text-xs text-slate-500">
+              Each GMass account fires at its own time — set them the same to keep both accounts sending together.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-2 text-xs font-semibold text-slate-700">GMass 1</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={gmass1Hour}
+                    onChange={(e) => setGmass1Hour(clampInt(Number(e.target.value), 0, 23))}
+                    placeholder="Hour"
+                  />
+                  <Input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={gmass1Minute}
+                    onChange={(e) => setGmass1Minute(clampInt(Number(e.target.value), 0, 59))}
+                    placeholder="Minute"
+                  />
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-2 text-xs font-semibold text-slate-700">GMass 2</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={gmass2Hour}
+                    onChange={(e) => setGmass2Hour(clampInt(Number(e.target.value), 0, 23))}
+                    placeholder="Hour"
+                  />
+                  <Input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={gmass2Minute}
+                    onChange={(e) => setGmass2Minute(clampInt(Number(e.target.value), 0, 59))}
+                    placeholder="Minute"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Template */}

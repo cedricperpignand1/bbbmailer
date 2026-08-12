@@ -291,6 +291,13 @@ model MassCampaign {
   sendHourET   Int @default(11)
   sendMinuteET Int @default(0)
 
+  // Optional per-account overrides — when set, that GMass account fires at its
+  // own time instead of the shared sendHourET/sendMinuteET above.
+  gmass1SendHourET   Int?
+  gmass1SendMinuteET Int?
+  gmass2SendHourET   Int?
+  gmass2SendMinuteET Int?
+
   cycleNumber     Int @default(1)  // increments each time the full list is completed
   lastCycleDoneAt DateTime?        // when the last cycle finished (bounce scan trigger)
 

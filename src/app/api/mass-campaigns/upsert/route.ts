@@ -28,6 +28,10 @@ export async function POST(req: Request) {
     maxPerDay,
     sendHourET,
     sendMinuteET,
+    gmass1SendHourET,
+    gmass1SendMinuteET,
+    gmass2SendHourET,
+    gmass2SendMinuteET,
   } = body;
 
   if (!categoryId) {
@@ -59,6 +63,15 @@ export async function POST(req: Request) {
   const clampedHour = Math.min(Math.max(Number(sendHourET ?? 11), 0), 23);
   const clampedMin = Math.min(Math.max(Number(sendMinuteET ?? 0), 0), 59);
 
+  function clampNullableHour(v: unknown): number | null {
+    if (v === null || v === undefined || v === "") return null;
+    return Math.min(Math.max(Number(v), 0), 23);
+  }
+  function clampNullableMin(v: unknown): number | null {
+    if (v === null || v === undefined || v === "") return null;
+    return Math.min(Math.max(Number(v), 0), 59);
+  }
+
   const data = {
     name: String(name || "Mass Campaign").trim().slice(0, 120),
     active: Boolean(active),
@@ -70,6 +83,10 @@ export async function POST(req: Request) {
     maxPerDay: clampedMax,
     sendHourET: clampedHour,
     sendMinuteET: clampedMin,
+    gmass1SendHourET: clampNullableHour(gmass1SendHourET),
+    gmass1SendMinuteET: clampNullableMin(gmass1SendMinuteET),
+    gmass2SendHourET: clampNullableHour(gmass2SendHourET),
+    gmass2SendMinuteET: clampNullableMin(gmass2SendMinuteET),
   };
 
   const existing = await prisma.massCampaign.findFirst({ orderBy: { createdAt: "desc" } });

@@ -84,6 +84,10 @@ export async function GET() {
           maxPerDay: massCampaign.maxPerDay,
           sendHourET: massCampaign.sendHourET,
           sendMinuteET: massCampaign.sendMinuteET,
+          gmass1SendHourET: massCampaign.gmass1SendHourET,
+          gmass1SendMinuteET: massCampaign.gmass1SendMinuteET,
+          gmass2SendHourET: massCampaign.gmass2SendHourET,
+          gmass2SendMinuteET: massCampaign.gmass2SendMinuteET,
           createdAt: massCampaign.createdAt,
           updatedAt: massCampaign.updatedAt,
         }
