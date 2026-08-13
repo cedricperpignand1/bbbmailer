@@ -86,7 +86,13 @@ export async function stampAndSaveImage(
 
   const family = initFont();
   const fontFamily = family === 'sans-serif' ? 'sans-serif' : `"${family}"`;
-  const baseImg = await loadImage(imgBuf);
+  let baseImg;
+  try {
+    baseImg = await loadImage(imgBuf);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`loadImage failed: ${msg} | bytes=${imgBuf.length} contentType=${res.headers.get('content-type')} head=${imgBuf.subarray(0, 16).toString('hex')}`);
+  }
   const W = baseImg.width  || 1024;
   const H = baseImg.height || 1024;
 
