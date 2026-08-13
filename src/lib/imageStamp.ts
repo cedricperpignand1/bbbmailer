@@ -1,8 +1,19 @@
 import { createCanvas, GlobalFonts, loadImage } from '@napi-rs/canvas';
+import sharp from 'sharp';
 import path from 'path';
 import fs from 'fs';
 
 const LOGO_PATH = path.join(process.cwd(), 'public', 'bbb-logo.png');
+
+/**
+ * Re-encode via sharp/libvips before handing to @napi-rs/canvas's Skia decoder.
+ * gpt-image-1's JPEG/PNG output trips Skia's decoder ("Invalid SVG image" —
+ * its generic "no codec could read this" fallback message) even though the
+ * bytes are valid images; sharp normalizes them into something Skia can read.
+ */
+async function normalizeForCanvas(buf: Buffer): Promise<Buffer> {
+  return sharp(buf).jpeg({ quality: 95 }).toBuffer();
+}
 
 // Font candidates — first found wins.
 // The Noto Sans entry (last) is bundled inside next itself so it always exists in production.
@@ -82,17 +93,11 @@ export async function stampAndSaveImage(
 ): Promise<string> {
   const res = await fetch(dalleUrl);
   if (!res.ok) throw new Error(`Failed to fetch DALL-E image: ${res.status}`);
-  const imgBuf = Buffer.from(await res.arrayBuffer());
+  const imgBuf = await normalizeForCanvas(Buffer.from(await res.arrayBuffer()));
 
   const family = initFont();
   const fontFamily = family === 'sans-serif' ? 'sans-serif' : `"${family}"`;
-  let baseImg;
-  try {
-    baseImg = await loadImage(imgBuf);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`loadImage failed: ${msg} | bytes=${imgBuf.length} contentType=${res.headers.get('content-type')} head=${imgBuf.subarray(0, 16).toString('hex')}`);
-  }
+  const baseImg = await loadImage(imgBuf);
   const W = baseImg.width  || 1024;
   const H = baseImg.height || 1024;
 
@@ -184,7 +189,7 @@ export async function stampAndSaveFile(
 ): Promise<string> {
   const res = await fetch(dalleUrl);
   if (!res.ok) throw new Error(`Failed to fetch DALL-E image: ${res.status}`);
-  const imgBuf = Buffer.from(await res.arrayBuffer());
+  const imgBuf = await normalizeForCanvas(Buffer.from(await res.arrayBuffer()));
 
   const family = initFont();
   const fontFamily = family === 'sans-serif' ? 'sans-serif' : `"${family}"`;
@@ -268,7 +273,7 @@ export async function stampStoryImage(
 ): Promise<string> {
   const res = await fetch(dalleUrl);
   if (!res.ok) throw new Error(`Failed to fetch DALL-E image: ${res.status}`);
-  const imgBuf  = Buffer.from(await res.arrayBuffer());
+  const imgBuf  = await normalizeForCanvas(Buffer.from(await res.arrayBuffer()));
   const baseImg = await loadImage(imgBuf);
 
   const family    = initFont();
