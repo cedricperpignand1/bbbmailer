@@ -1298,16 +1298,16 @@ export async function generateInstagramImage(imagePrompt: string): Promise<strin
 
   try {
     const response = await openai.images.generate({
-      model: 'dall-e-3',
+      model: 'gpt-image-1',
       prompt: finalPrompt,
       n: 1,
       size: '1024x1024',
-      quality: 'standard',
+      quality: 'high',
     });
 
-    const url = response.data?.[0]?.url;
-    if (!url) throw new Error('OpenAI returned no image URL');
-    return url;
+    const b64 = response.data?.[0]?.b64_json;
+    if (!b64) throw new Error('OpenAI returned no image data');
+    return `data:image/png;base64,${b64}`;
   } catch (error) {
     console.error('[generateInstagramImage] Image generation failed:', error);
     throw error instanceof Error ? error : new Error(String(error));
