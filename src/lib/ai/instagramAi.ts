@@ -1303,7 +1303,6 @@ export async function generateInstagramImage(imagePrompt: string): Promise<strin
       n: 1,
       size: '1024x1024',
       quality: 'standard',
-      style: 'vivid',
     });
 
     const url = response.data?.[0]?.url;
