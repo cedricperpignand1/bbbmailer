@@ -24,6 +24,22 @@ async function skipWith(reason: string) {
   return NextResponse.json({ skip: true, reason });
 }
 
+/** Helper: record an attempted-but-failed run (e.g. DALL-E error) so it's visible in the dashboard instead of silently vanishing */
+async function logFailure(windowKey: string, dateStr: string, error: string) {
+  await Promise.all([
+    prisma.igPublishLog.upsert({
+      where: { dateStr_windowKey: { dateStr, windowKey } },
+      create: { configId: 1, dateStr, windowKey, caption: '', status: 'failed', error },
+      update: { status: 'failed', error, publishedAt: new Date() },
+    }),
+    prisma.igPublishConfig.update({
+      where: { id: 1 },
+      data: { lastCronAt: new Date(), lastSkipReason: `failed: ${error.slice(0, 150)}` },
+    }),
+  ]).catch(() => {/* ignore if row doesn't exist yet */});
+  return NextResponse.json({ ok: false, error }, { status: 500 });
+}
+
 export async function POST(req: NextRequest) {
   // Optional cron key guard
   const cronKey = req.headers.get('x-cron-key');
@@ -98,9 +114,11 @@ async function runThursdayReel(
   const videoContent = await generateVideoContent(usedAngles);
 
   // Generate DALL-E first-frame image (clean — no text overlay)
-  const dalleUrl = await generateInstagramImage(videoContent.dalleImagePrompt);
-  if (!dalleUrl) {
-    return NextResponse.json({ ok: false, error: 'DALL-E first frame generation failed' }, { status: 500 });
+  let dalleUrl: string;
+  try {
+    dalleUrl = await generateInstagramImage(videoContent.dalleImagePrompt);
+  } catch (err) {
+    return logFailure(windowKey, dateStr, `DALL-E first frame generation failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || 'https://bbbmailer.vercel.app').replace(/\/$/, '');
@@ -240,9 +258,11 @@ async function runImagePost(
   }
 
   // ── 5. Generate + stamp image, save to DB ────────────────────────────────
-  const dalleUrl = await generateInstagramImage(content.imagePrompt);
-  if (!dalleUrl) {
-    return NextResponse.json({ ok: false, error: 'Image generation failed' }, { status: 500 });
+  let dalleUrl: string;
+  try {
+    dalleUrl = await generateInstagramImage(content.imagePrompt);
+  } catch (err) {
+    return logFailure(windowKey, dateStr, `Image generation failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   const dataUri  = await stampAndSaveImage(dalleUrl, content.headline);

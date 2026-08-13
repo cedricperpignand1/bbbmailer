@@ -36,13 +36,6 @@ export async function POST() {
     // ── 3. Generate image via DALL-E 3 ───────────────────────────────────────
     const dalleUrl = await generateInstagramImage(content.imagePrompt);
 
-    if (!dalleUrl) {
-      return NextResponse.json(
-        { ok: false, error: 'Image generation failed — try again.' },
-        { status: 500 }
-      );
-    }
-
     // ── 4. Fetch, composite headline + logo, return as base64 ────────────────
     const imageData = await stampAndSaveImage(dalleUrl, content.headline);
 

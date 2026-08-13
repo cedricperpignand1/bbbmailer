@@ -1307,10 +1307,11 @@ export async function generateInstagramImage(imagePrompt: string): Promise<strin
     });
 
     const url = response.data?.[0]?.url;
-    return url ?? '';
+    if (!url) throw new Error('OpenAI returned no image URL');
+    return url;
   } catch (error) {
     console.error('[generateInstagramImage] Image generation failed:', error);
-    return '';
+    throw error instanceof Error ? error : new Error(String(error));
   }
 }
 
