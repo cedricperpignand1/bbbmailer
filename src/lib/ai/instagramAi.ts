@@ -1303,11 +1303,12 @@ export async function generateInstagramImage(imagePrompt: string): Promise<strin
       n: 1,
       size: '1024x1024',
       quality: 'high',
+      output_format: 'jpeg',
     });
 
     const b64 = response.data?.[0]?.b64_json;
     if (!b64) throw new Error('OpenAI returned no image data');
-    return `data:image/png;base64,${b64}`;
+    return `data:image/jpeg;base64,${b64}`;
   } catch (error) {
     console.error('[generateInstagramImage] Image generation failed:', error);
     throw error instanceof Error ? error : new Error(String(error));
