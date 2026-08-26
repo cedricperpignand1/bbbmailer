@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const BATCH_SIZE_PER_ACCOUNT = 35; // emails per account per cron run — 35 x 2 accounts = 70/tick, safe within 300s limit
+const BATCH_SIZE_PER_ACCOUNT = 70; // emails per account per cron run — 70 x 2 accounts = 140/tick; any remainder rolls to the next tick
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

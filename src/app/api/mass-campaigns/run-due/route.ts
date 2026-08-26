@@ -9,9 +9,11 @@ export const maxDuration = 300;
 
 /**
  * Batch size per account per cron tick.
- * 35 x 2 accounts (gmass1/gmass2) = 70 emails/tick, fits within 300s with the tightened pacing below.
+ * 70 x 2 accounts (gmass1/gmass2) = 140 emails/tick. May not always fully complete
+ * within the 300s maxDuration with the pacing below — any remainder is picked up
+ * automatically by the next 5-min tick since progress is committed per-send.
  */
-const BATCH_SIZE_PER_ACCOUNT = 35;
+const BATCH_SIZE_PER_ACCOUNT = 70;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
