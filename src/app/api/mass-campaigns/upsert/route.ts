@@ -59,7 +59,7 @@ export async function POST(req: Request) {
   }
 
   const addresses = normalizeAddresses(addressesText || "");
-  const clampedMax = Math.min(Math.max(Number(maxPerDay ?? 45), 1), 500);
+  const clampedMax = Math.min(Math.max(Number(maxPerDay ?? 45), 1), 2000);
   const clampedHour = Math.min(Math.max(Number(sendHourET ?? 11), 0), 23);
   const clampedMin = Math.min(Math.max(Number(sendMinuteET ?? 0), 0), 59);
 

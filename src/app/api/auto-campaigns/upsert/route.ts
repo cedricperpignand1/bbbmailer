@@ -72,7 +72,7 @@ export async function POST(req: Request) {
     : String(body?.templateSubject ?? "").slice(0, 500);
   const templateBody = templateId ? "" : String(body?.templateBody ?? "");
 
-  const maxPerDay = clampInt(Number(body?.maxPerDay ?? 45), 1, 500);
+  const maxPerDay = clampInt(Number(body?.maxPerDay ?? 45), 1, 2000);
   const sendHourET = clampInt(Number(body?.sendHourET ?? 11), 0, 23);
   const sendMinuteET = clampInt(Number(body?.sendMinuteET ?? 0), 0, 59);
 
